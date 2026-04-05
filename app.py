@@ -313,11 +313,11 @@ if bot:
         help_text = (
             "🤖 <b>SAP BAS 监控机器人</b>\n\n"
             "--- 可用命令 ---\n"
-            "🔹 /status [id] (查询云端实时状态)\n"
-            "🔹 /stop [id] (强制停止 BAS 容器)\n"
-            "🔹 /start [id] (唤醒并穿透 BAS 隧道)\n"
-            "🔹 /restart [id] (完全重置生命周期)\n\n"
-            "💡 <i>提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有。</i>"
+            "🔹 /status   ( 查询 BAS )\n"
+            "🔹 /stop     ( 停止 BAS )\n"
+            "🔹 /start    ( 启动 BAS )\n"
+            "🔹 /restart  ( 重启 BAS )\n\n"
+            "💡 <i>提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。</i>"
         )
         bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -334,7 +334,7 @@ if bot:
             bot.reply_to(message, f"❌ 未找到 ID 为 {target_id} 的账号。", parse_mode="HTML")
             return
 
-        bot.reply_to(message, f"⏳ 正在查询 {len(target_accounts)} 个账号的云端状态，稍候...", parse_mode="HTML")
+        bot.reply_to(message, f"⏳ 正在查询 {len(target_accounts)} 个账号的状态，请稍候...", parse_mode="HTML")
         
         def _check():
             sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
@@ -447,7 +447,7 @@ if __name__ == '__main__':
     for acc in ACCOUNTS:
         scheduler.add_job(lambda a=acc: async_task_runner("KEEPALIVE", a), trigger='cron', minute=acc['joba_min'], id=f"job_keepalive_{acc['id']}")
         scheduler.add_job(lambda a=acc: async_task_runner("RESTART", a), trigger='cron', hour=acc['jobb_hrs'], minute=acc['jobb_min'], id=f"job_restart_{acc['id']}")
-        logger.info(f"[+] 账号 {acc['id']} 定时器挂载完毕 (保活: 每小时 {acc['joba_min']}分 | 重启: 每 {acc['jobb_hrs']} 的 {acc['jobb_min']}分)")
+        logger.info(f"[+] 账号 {acc['id']} 定时器挂载完毕 (保活: 每小时 {acc['joba_min']}分 | 重启: 每天 {acc['jobb_hrs']} 的 {acc['jobb_min']}分)")
 
     scheduler.start()
 

@@ -479,7 +479,7 @@ HTML_TEMPLATE = """
     </div>
     
     <div id="input-area">
-        <span id="cmd-prefix">请输入 /sap 查询可用命令</span>
+        <span id="cmd-prefix">请输入 /sap 查询可用命令：</span>
         <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。">
     </div>
 

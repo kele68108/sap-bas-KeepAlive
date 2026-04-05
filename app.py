@@ -244,7 +244,7 @@ class SAPController:
                         screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
-                            send_tg_photo(screenshot_path, f"🎯 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 隧道已唤醒！")
+                            send_tg_photo(screenshot_path, f"🎯 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已唤醒！")
                         logger.info(f"[+] 🎯 账号 {acc_id} [{action_type}] 任务成功。")
                         return True
                         
@@ -292,7 +292,7 @@ def bot_action_runner(action, target_id=None):
         if target_id:
             send_tg_msg(f"✅ 收到指令：即将为 <b>账号 {target_id}</b> 执行 <b>{action}</b>...")
         else:
-            send_tg_msg(f"✅ 收到指令：即将为 <b>{len(target_accounts)} 个账号</b> 依次串行执行 <b>{action}</b>...")
+            send_tg_msg(f"✅ 收到指令：即将为 <b>{len(target_accounts)} 个账号</b> 依次执行 <b>{action}</b>...")
             
         for acc in target_accounts:
             SAPController.execute_lifecycle_action(action, acc)

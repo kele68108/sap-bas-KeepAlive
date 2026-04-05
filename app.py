@@ -125,7 +125,7 @@ class SAPController:
                 api_request = context.request
 
                 try:
-                    logger.info("[-] 正在模拟登录过 SSO...")
+                    logger.info("[-] 正在模拟登录...")
                     page.goto(f"{REGION_URL}/index.html")
                     page.locator("input[name='j_username'], input[type='email']").fill(SAP_EMAIL)
                     if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
@@ -148,7 +148,7 @@ class SAPController:
                     except Exception:
                         pass
                     
-                    logger.info("[+] 登录成功，正在获取 Workspace API...")
+                    logger.info("[+] 登录成功，正在调用API...")
                     req_headers = {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
                     ws_api_url = f"{REGION_URL}/ws-manager/api/v1/workspace"
                     workspaces = api_request.get(ws_api_url, headers=req_headers).json()
@@ -199,7 +199,7 @@ class SAPController:
                                 logger.error("[!] 启动超时")
                                 return False
                                 
-                        logger.info("[*] 开始进行 UI 穿透保活 (进入 IDE)...")
+                        logger.info("[*] 开始进行 UI 穿透...")
                         page.goto(f"{REGION_URL}/index.html")
                         time.sleep(8)
                         
@@ -207,7 +207,7 @@ class SAPController:
                         ws_link = ws_frame.locator(f"a[href*='{ws_uuid}']").first
                         ws_link.wait_for(state="visible", timeout=20000)
                         ws_link.click(force=True)
-                        logger.info("[-] 已突破 iframe，正在加载 IDE (30秒)...")
+                        logger.info("[-]正在加载 IDE (等待30秒)...")
                         time.sleep(30)
                         
                         logger.info("[-] 执行弹窗清理策略...")
@@ -219,7 +219,7 @@ class SAPController:
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
                             send_tg_photo(screenshot_path, f"🎯 <b>[{action_type}] 任务完成</b>\n工作区 [<b>{display_name}</b>] 隧道已唤醒！")
-                        logger.info(f"[+] 🎯 [{action_type}] 任务全流程圆满成功！")
+                        logger.info(f"[+] 🎯 [{action_type}] 任务成功，发送截图...")
                         return True
                         
                 except Exception as inner_e:
@@ -253,7 +253,7 @@ def async_task_runner(action, tg_reply_msg=None):
         SAPController.execute_lifecycle_action(action)
     finally:
         action_lock.release()
-        logger.info(f"[{action}] 任务结束，释放锁。")
+        logger.info(f"[{action}] 任务结束。")
 
 # ==========================================
 # 6. Telegram Bot ChatOps
@@ -363,7 +363,7 @@ if __name__ == '__main__':
     scheduler.add_job(lambda: async_task_runner("KEEPALIVE"), trigger='cron', minute=JOBA_MINUTE, id='job_keepalive')
     scheduler.add_job(lambda: async_task_runner("RESTART"), trigger='cron', hour=JOBB_HOURS, minute=JOBB_MINUTE, id='job_restart')
     scheduler.start()
-    logger.info(f"[+] 保活任务 (JobA: 每小时:{JOBA_MINUTE}, JobB: {JOBB_HOURS}:{JOBB_MINUTE})")
+    logger.info(f"[+] 保活任务 (访问保活: 每小时:{JOBA_MINUTE}, 定时重启: {JOBB_HOURS}:{JOBB_MINUTE})")
 
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()

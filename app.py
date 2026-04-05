@@ -177,13 +177,13 @@ class SAPController:
                     if action_type == "STOP" and status == "STOPPED":
                         msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>STOPPED</b> 状态，无需重复停止。"
                         send_tg_msg(msg)
-                        logger.info(f"[-] 账号 {acc_id} 状态已是 STOPPED，提前退出。")
+                        logger.info(f"[-] 账号 {acc_id} 状态已是 STOPPED，无需重复停止。")
                         return True
                         
                     if action_type == "START" and status == "RUNNING":
-                        msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>RUNNING</b> 状态，无需重复启动。\n💡 <i>提示：若容器在线但你的代理隧道不通，请使用 /restart 进行深度洗髓重置。</i>"
+                        msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>RUNNING</b> 状态，无需重复启动。\n💡 <i>提示：若代理隧道不通，请使用 /restart 进行深度重置。</i>"
                         send_tg_msg(msg)
-                        logger.info(f"[-] 账号 {acc_id} 状态已是 RUNNING，提前退出。")
+                        logger.info(f"[-] 账号 {acc_id} 状态已是 RUNNING，无需重复启动。")
                         return True
                     # ========================================================
                     csrf_headers = req_headers.copy()
@@ -371,7 +371,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAP BAS 终端</title>
+    <title>SAP BAS KEEPALIVE</title>
     <style>
         body { background-color: #1e1e1e; color: #0f0; font-family: 'Consolas', monospace; margin: 0; padding: 20px; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
         .header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; }

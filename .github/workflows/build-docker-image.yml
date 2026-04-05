@@ -1,0 +1,53 @@
+name: Build and Push Docker Image to GHCR
+
+on:
+  # 触发条件1：当代码推送到 main 分支时自动执行
+  push:
+    branches: [ "main" ]
+  # 触发条件2：允许在 GitHub Actions 页面手动点击运行（测试调试必备）
+  workflow_dispatch: 
+
+env:
+  # 设定镜像仓库为 GitHub 官方的容器注册表
+  REGISTRY: ghcr.io
+  # 镜像名称自动获取为你的 "用户名/仓库名" (注意全部会转为小写)
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    
+    # 极其重要：赋予 GitHub Actions 推送镜像到仓库的权限
+    permissions:
+      contents: read
+      packages: write 
+
+    steps:
+      - name: 检出代码 (Checkout repository)
+        uses: actions/checkout@v4
+
+      - name: 登录 GitHub 容器镜像仓库 (Log in to GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # 直接使用 GitHub 原生提供的短期 Token，极其安全，不用配 Secret
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 提取 Docker 标签和元数据 (Extract metadata)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          # 默认打上 main 标签，或者 git 的 sha 标签
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+
+      - name: 构建并推送 Docker 镜像 (Build and push Docker image)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

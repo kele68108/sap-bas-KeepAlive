@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAP BAS 监控终端</title>
+    <style>
+        body {
+            background-color: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Consolas', 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        .header {
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .title { font-size: 1.2rem; font-weight: bold; color: #fff; }
+        .status { color: #00ff00; }
+        #terminal {
+            flex: 1;
+            overflow-y: auto;
+            background-color: #000;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-line { margin: 0; }
+        /* 针对不同日志级别的简单变色 */
+        .INFO { color: #00ff00; }
+        .WARNING { color: #ffcc00; }
+        .ERROR { color: #ff3333; }
+        .DEBUG { color: #888888; }
+        
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #777; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">🚀 SAP BAS 自动化运维中台</div>
+        <div class="status">● 系统运行中 (自动刷新: 3s)</div>
+    </div>
+    <div id="terminal"></div>
+
+    <script>
+        const token = new URLSearchParams(window.location.search).get('token');
+        const terminal = document.getElementById('terminal');
+        let autoScroll = true;
+
+        // 检测用户是否手动向上滚动，如果是则暂停自动滚动到底部
+        terminal.addEventListener('scroll', () => {
+            const isAtBottom = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10;
+            autoScroll = isAtBottom;
+        });
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch(`/api/logs?token=${token}`);
+                if (response.status === 401) {
+                    terminal.innerHTML = '<span class="ERROR">[!] 鉴权失败：Token 无效或缺失。</span>';
+                    return;
+                }
+                const data = await response.json();
+                
+                let htmlContent = '';
+                data.logs.forEach(log => {
+                    let cssClass = 'INFO';
+                    if (log.includes('[WARNING]')) cssClass = 'WARNING';
+                    if (log.includes('[ERROR]') || log.includes('失败') || log.includes('异常')) cssClass = 'ERROR';
+                    htmlContent += `<p class="log-line ${cssClass}">${log}</p>`;
+                });
+                
+                terminal.innerHTML = htmlContent;
+
+                if (autoScroll) {
+                    terminal.scrollTop = terminal.scrollHeight;
+                }
+            } catch (error) {
+                console.error("无法获取日志:", error);
+            }
+        }
+
+        // 初始化拉取一次，之后每 3 秒刷新一次
+        fetchLogs();
+        setInterval(fetchLogs, 3000);
+    </script>
+</body>
+</html>

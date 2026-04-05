@@ -6,7 +6,7 @@ import urllib.parse
 import logging
 from collections import deque
 import requests
-from flask import Flask, jsonify, render_template_string, request # 新增了 request
+from flask import Flask, jsonify, render_template_string, request
 
 from apscheduler.schedulers.background import BackgroundScheduler
 import telebot
@@ -20,6 +20,17 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 WEB_TOKEN = os.environ.get("WEB_TOKEN", "default_token")
 PORT = int(os.environ.get("PORT", 8080))
 
+# [新增功能 1] URL 自动格式化函数 (自动识别并补全 https://)
+def format_url(url_str):
+    if not url_str:
+        return None
+    url_str = url_str.strip()
+    if url_str.startswith("https://"):
+        url_str = url_str[8:]
+    elif url_str.startswith("http://"):
+        url_str = url_str[7:]
+    return f"https://{url_str}"
+
 # 动态加载所有配置了 SAP_EMAIL_X 的账号
 ACCOUNTS = []
 for i in range(1, 11):
@@ -29,12 +40,12 @@ for i in range(1, 11):
             "id": i,
             "email": email,
             "password": os.environ.get(f"SAP_PASSWORD_{i}"),
-            "region_url": os.environ.get(f"REGION_URL_{i}"),
+            "region_url": format_url(os.environ.get(f"REGION_URL_{i}")), # 自动补全 https
             "joba_min": os.environ.get(f"JOBA_MINUTE_{i}", "50"),
             "jobb_hrs": os.environ.get(f"JOBB_HOURS_{i}", "*/12"),
             "jobb_min": os.environ.get(f"JOBB_MINUTE_{i}", "30"),
-            "tunnel_url": os.environ.get(f"TUNNEL_URL_{i}"), # 新增：隧道探针URL
-            "fail_count": 0                                  # 新增：连续失败计数器
+            "tunnel_url": format_url(os.environ.get(f"TUNNEL_URL_{i}")), # 自动补全 https
+            "fail_count": 0
         })
 
 action_lock = threading.Lock()
@@ -174,7 +185,6 @@ class SAPController:
                     display_name = ws.get("config", {}).get("labels", {}).get("ws-manager.devx.sap.com/displayname", ws_uuid)
                     status = ws.get("runtime", {}).get("status")
                     
-                    # 🛡️ 科学拦截
                     if action_type == "STOP" and status == "STOPPED":
                         msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>STOPPED</b> 状态，无需重复停止。"
                         send_tg_msg(msg)
@@ -268,7 +278,6 @@ class SAPController:
 # 5. 任务并发调度控制逻辑 与 新增隧道探针
 # ==========================================
 def async_task_runner(action, account):
-    """供定时任务使用的单发运行器"""
     if not action_lock.acquire(blocking=False):
         logger.warning(f"被跳过：账号 {account['id']} 尝试 {action}，但系统繁忙。")
         return
@@ -278,7 +287,6 @@ def async_task_runner(action, account):
         action_lock.release()
 
 def bot_action_runner(action, target_id=None):
-    """供机器人和网页端手动调用的全局串行运行器"""
     if not action_lock.acquire(blocking=False):
         logger.warning("系统繁忙，手动指令排队被拒绝。")
         send_tg_msg("⚠️ 系统当前有任务正在执行，请等待释放锁后再试。")
@@ -310,44 +318,38 @@ def bot_action_runner(action, target_id=None):
         action_lock.release()
 
 def tunnel_health_check(account):
-    """[新增] 隧道心跳监测探针"""
     url = account.get('tunnel_url')
     if not url: return
-    
-    # 巧妙避开撞车：如果系统正在跑重启，隧道本来就是断的，直接 return 跳过本次检测
-    if action_lock.locked():
-        return
+    if action_lock.locked(): return
         
     try:
-        # 设置 timeout 防卡死，模拟浏览器头防止被盾直接拒绝
         headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(url, headers=headers, timeout=10)
         status_code = res.status_code
-    except Exception as e:
-        status_code = 503 # 任何连接超时、域名解析失败，统一按离线 503 处理
+    except Exception:
+        status_code = 503
         
     acc_id = account['id']
     
-    # 逻辑分析：4xx 证明隧道畅通，重置 fail_count
+    # [新增功能 2] 无论状态如何，都将其显式打印，使其能在终端流中滚动
     if 400 <= status_code < 500:
+        logger.info(f"[-] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🟢 隧道在线")
         if account['fail_count'] > 0:
-            logger.info(f"[+] 隧道恢复：账号 {acc_id} 探针打通 (状态码: {status_code})。警报解除。")
+            logger.info(f"[+] 隧道恢复：账号 {acc_id} 警报解除。")
         account['fail_count'] = 0
         
-    # 逻辑分析：5xx 证明物理掉线，累计 5 次杀无赦
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f"[!] 探针警告：账号 {acc_id} 隧道离线 (状态码: {status_code}) - 累计失败 {account['fail_count']}/5 次")
+        logger.warning(f"[!] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🔴 隧道离线 ({account['fail_count']}/5)")
         
         if account['fail_count'] >= 5:
             logger.error(f"🚨 [紧急避险] 账号 {acc_id} 隧道连续 5 次断线，触发自动重启洗髓！")
-            account['fail_count'] = 0 # 重置计数器，防止重启风暴
+            account['fail_count'] = 0
             send_tg_msg(f"🚨 <b>隧道掉线警报 (账号 {acc_id})</b>\n检测到 HTTP 50x 或无法连接，连续 5 次心跳失败，正在触发紧急重置！")
-            # 召唤全局任务线程去跑（因为里面有锁机制，非常安全）
             threading.Thread(target=bot_action_runner, args=("RESTART", acc_id)).start()
 
 # ==========================================
-# 6. Telegram Bot ChatOps (支持带参数)
+# 6. Telegram Bot ChatOps
 # ==========================================
 if bot:
     @bot.message_handler(commands=['sap'])
@@ -421,7 +423,6 @@ HTML_TEMPLATE = """
         .INFO { color: #0f0; } .WARNING { color: #fc0; } .ERROR { color: #f33; }
         ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #1e1e1e; } ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
         
-        /* 新增输入交互区样式 */
         #input-area { display: flex; margin-top: 15px; border-top: 1px solid #333; padding-top: 15px; align-items: center; }
         #cmd-prefix { color: #0f0; margin-right: 10px; font-weight: bold; font-size: 1.1rem; }
         #cmdInput { flex: 1; background: transparent; border: none; color: #fff; font-family: 'Consolas', monospace; font-size: 1.1rem; outline: none; }
@@ -430,14 +431,14 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header">
-        <div class="title">🚀 SAP BAS KEEPALIVE</div>
+        <div class="title">🚀 SAP BAS KEEPALIVE 终端</div>
         <div>● 运行中 (刷新: 3s)</div>
     </div>
     <div id="terminal"></div>
     
     <div id="input-area">
-        <span id="cmd-prefix">root@bas:~#</span>
-        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="输入指令 (如 /status, /start 1, /restart) 并按回车执行">
+        <span id="cmd-prefix">请输入 /sap 获取可用命令</span>
+        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。 输入命令按回车执行">
     </div>
 
     <script>
@@ -467,13 +468,11 @@ HTML_TEMPLATE = """
         fetchLogs(); 
         setInterval(fetchLogs, 3000);
 
-        // 新增：监听输入框回车键并提交后端接口
         cmdInput.addEventListener('keypress', async function (e) {
             if (e.key === 'Enter') {
                 const cmd = cmdInput.value.trim();
                 if (!cmd) return;
                 
-                // 将指令展示在本地日志，增强打击感
                 const fakeLog = document.createElement('p');
                 fakeLog.className = 'log-line INFO';
                 fakeLog.innerText = `[${new Date().toISOString().slice(0,19).replace('T', ' ')}] root@bas:~# ${cmd}`;
@@ -515,7 +514,6 @@ def api_logs(token):
         return jsonify({"error": "Unauthorized"}), 401
     return jsonify({"logs": list(log_queue)})
 
-# [新增] Web 终端接收指令的专属路由
 @app.route('/api/command/<token>', methods=['POST'])
 def web_command(token):
     if token != WEB_TOKEN:
@@ -532,7 +530,7 @@ def web_command(token):
     command = parts[0].replace("/", "").lower()
     target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
     
-    logger.info(f"💻 [Web终端输入] 接收到指令: {cmd_str}")
+    logger.info(f"💻 [Web终端] {cmd_str}")
     
     if command in ['start', 'stop', 'restart']:
         threading.Thread(target=bot_action_runner, args=(command.upper(), target_id)).start()
@@ -553,6 +551,15 @@ def web_command(token):
                 
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})
+        
+    # [新增功能 3] /sap 命令输出竖向可用命令
+    elif command == 'sap':
+        logger.info("--- 可用命令 ---")
+        logger.info("🔹 /status   ( 查询 BAS )")
+        logger.info("🔹 /stop     ( 停止 BAS )")
+        logger.info("🔹 /start    ( 启动 BAS )")
+        logger.info("🔹 /restart  ( 重启 BAS )")
+        return jsonify({"status": "Help displayed"})
     
     else:
         logger.warning(f"⚠️ [Web终端] 未知命令: {cmd_str}")
@@ -578,7 +585,6 @@ if __name__ == '__main__':
         scheduler.add_job(lambda a=acc: async_task_runner("KEEPALIVE", a), trigger='cron', minute=acc['joba_min'], id=f"job_keepalive_{acc['id']}")
         scheduler.add_job(lambda a=acc: async_task_runner("RESTART", a), trigger='cron', hour=acc['jobb_hrs'], minute=acc['jobb_min'], id=f"job_restart_{acc['id']}")
         
-        # [新增] 仅为配置了 TUNNEL_URL 的账号挂载探针
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
             logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 探针:启用)")
@@ -591,4 +597,10 @@ if __name__ == '__main__':
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
     logger.info(f"[+] Web 终端面板已就绪！")
+    
+    # 强行在面板就绪后，立刻触发一次探针检测，确保探针结果第一时间显示在终端的最下方
+    for acc in ACCOUNTS:
+        if acc.get('tunnel_url'):
+            threading.Thread(target=tunnel_health_check, args=(acc,)).start()
+
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)

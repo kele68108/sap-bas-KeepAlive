@@ -342,7 +342,7 @@ def tunnel_health_check(account):
         logger.warning(f"[!] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🔴 隧道离线 ({account['fail_count']}/5)")
         
         if account['fail_count'] >= 5:
-            logger.error(f"🚨 [紧急避险] 账号 {acc_id} 隧道连续 5 次断线，触发自动重启洗髓！")
+            logger.error(f"🚨 [紧急避险] 账号 {acc_id} 隧道连续 5 次心跳失败，触发自动重启！")
             account['fail_count'] = 0
             send_tg_msg(f"🚨 <b>隧道掉线警报 (账号 {acc_id})</b>\n检测到 HTTP 50x 或无法连接，连续 5 次心跳失败，正在触发紧急重置！")
             threading.Thread(target=bot_action_runner, args=("RESTART", acc_id)).start()
@@ -392,7 +392,7 @@ if bot:
         
         def _check():
             sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
-            report = f"📊 <b>全局后台锁</b>: {sys_status}\n\n"
+            report = f"📊 <b>后台任务状态</b>: {sys_status}\n\n"
             
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
@@ -611,10 +611,10 @@ def web_command(token):
         
         def _check_web():
             sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
-            logger.info(f"📊 [查询报告] 全局后台锁: {sys_status}")
+            logger.info(f"📊 [查询报告] 后台任务状态: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                logger.info(f"👤 账号 {acc['id']} ({acc['email']}) -> ☁️ BAS真实状态: {status}")
+                logger.info(f"👤 账号 {acc['id']} ({acc['email']}) -> ☁️ 状态: {status}")
                 
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})

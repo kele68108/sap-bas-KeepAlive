@@ -366,7 +366,7 @@ if bot:
     def handle_help(message):
         if not check_tg_auth(message): return
         help_text = (
-            "🤖 <b>SAP BAS 监控机器人</b>\n\n"
+            "🤖 <b>SAP BAS KEEPALIVE 机器人</b>\n\n"
             "-------- 可用命令 --------\n\n"
             "🔹 /status   ( 查询 BAS )\n"
             "🔹 /stop     ( 停止 BAS )\n"
@@ -472,7 +472,7 @@ HTML_TEMPLATE = """
             <div class="mac-btns">
                 <div class="mac-btn btn-close"></div><div class="mac-btn btn-min"></div><div class="mac-btn btn-max"></div>
             </div>
-            <div class="title">🚀 SAP BAS KEEPALIVE</div>
+            <div class="title">🚀 SAP BAS KEEPALIVE 终端</div>
             <div class="status-indicator"><div class="dot"></div>运行中 (刷新:3s)</div>
         </div>
         <div id="terminal"></div>

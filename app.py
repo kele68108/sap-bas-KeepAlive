@@ -635,7 +635,7 @@ def web_command(token):
 # 8. 启动引导区
 # ==========================================
 def start_bot_polling():
-    logger.info("[*] ✈️ TG Bot 已上线...")
+    logger.info(f"✈️ TG Bot 已上线。")
     bot.infinity_polling()
 
 if __name__ == '__main__':
@@ -664,7 +664,7 @@ if __name__ == '__main__':
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info(f"[+] 💻 Web 终端面板已就绪！")
+    logger.info(f"💻 Web 终端面板已就绪！")
     
     for acc in ACCOUNTS:
         if acc.get('tunnel_url'):

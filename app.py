@@ -13,22 +13,29 @@ import telebot
 from playwright.sync_api import sync_playwright
 
 # ==========================================
-# 1. 核心配置与全局状态变量初始化
+# 1. 核心配置与多账号动态加载
 # ==========================================
-SAP_EMAIL = os.environ.get("SAP_EMAIL")
-SAP_PASSWORD = os.environ.get("SAP_PASSWORD")
-REGION_URL = os.environ.get("REGION_URL")
 TG_BOT_TOKEN = os.environ.get("TG_BOT_TOKEN")
 TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 WEB_TOKEN = os.environ.get("WEB_TOKEN", "default_token")
 PORT = int(os.environ.get("PORT", 8080))
 
-# --- 新增：自定义调度时间变量 ---
-JOBA_MINUTE = os.environ.get("JOBA_MINUTE", "50")
-JOBB_HOURS = os.environ.get("JOBB_HOURS", "*/12")
-JOBB_MINUTE = os.environ.get("JOBB_MINUTE", "30")
+# 动态加载所有配置了 SAP_EMAIL_X 的账号
+ACCOUNTS = []
+for i in range(1, 11):
+    email = os.environ.get(f"SAP_EMAIL_{i}")
+    if email:
+        ACCOUNTS.append({
+            "id": i,
+            "email": email,
+            "password": os.environ.get(f"SAP_PASSWORD_{i}"),
+            "region_url": os.environ.get(f"REGION_URL_{i}"),
+            "joba_min": os.environ.get(f"JOBA_MINUTE_{i}", "50"),
+            "jobb_hrs": os.environ.get(f"JOBB_HOURS_{i}", "*/12"),
+            "jobb_min": os.environ.get(f"JOBB_MINUTE_{i}", "30"),
+        })
 
-# ！！！核心全局锁：防止定时任务和手动指令互相抢占浏览器引发内存爆炸 ！！！
+# ！！！核心全局锁：确保任何时候只有一个无头浏览器在运行，防爆内存 ！！！
 action_lock = threading.Lock()
 
 # ==========================================
@@ -81,25 +88,24 @@ def send_tg_photo(photo_path, caption=""):
 # ==========================================
 class SAPController:
     @staticmethod
-    def get_workspace_info():
+    def get_workspace_info(account):
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
                 context = browser.new_context()
                 page = context.new_page()
-                page.goto(f"{REGION_URL}/index.html")
+                page.goto(f"{account['region_url']}/index.html")
                 
-                # 登录超时延长至 60 秒
-                page.locator("input[name='j_username'], input[type='email']").fill(SAP_EMAIL)
+                page.locator("input[name='j_username'], input[type='email']").fill(account['email'])
                 if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
                      page.locator("button#logOnFormSubmit, button[type='submit']").click()
                      time.sleep(2)
-                page.locator("input[name='j_password'], input[type='password']").fill(SAP_PASSWORD)
+                page.locator("input[name='j_password'], input[type='password']").fill(account['password'])
                 page.locator("button#logOnFormSubmit, button[type='submit']").click()
                 page.wait_for_url("**/index.html*", timeout=60000)
                 
                 req_headers = {"Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest"}
-                response = context.request.get(f"{REGION_URL}/ws-manager/api/v1/workspace", headers=req_headers)
+                response = context.request.get(f"{account['region_url']}/ws-manager/api/v1/workspace", headers=req_headers)
                 workspaces = response.json()
                 browser.close()
 
@@ -113,8 +119,13 @@ class SAPController:
             return False, None, str(e)
 
     @staticmethod
-    def execute_lifecycle_action(action_type):
-        logger.info(f"🚀 开始执行核心生命周期任务: [{action_type}]")
+    def execute_lifecycle_action(action_type, account):
+        acc_id = account['id']
+        region_url = account['region_url']
+        email = account['email']
+        password = account['password']
+        
+        logger.info(f"🚀 开始执行任务: [{action_type}] (账号 {acc_id})")
         work_dir = "/tmp"
         
         try:
@@ -125,16 +136,15 @@ class SAPController:
                 api_request = context.request
 
                 try:
-                    logger.info("[-] 正在模拟登录...")
-                    page.goto(f"{REGION_URL}/index.html")
-                    page.locator("input[name='j_username'], input[type='email']").fill(SAP_EMAIL)
+                    logger.info(f"[-] 账号 {acc_id} 正在模拟登录...")
+                    page.goto(f"{region_url}/index.html")
+                    page.locator("input[name='j_username'], input[type='email']").fill(email)
                     if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
                          page.locator("button#logOnFormSubmit, button[type='submit']").click()
                          time.sleep(2)
-                    page.locator("input[name='j_password'], input[type='password']").fill(SAP_PASSWORD)
+                    page.locator("input[name='j_password'], input[type='password']").fill(password)
                     page.locator("button#logOnFormSubmit, button[type='submit']").click()
                     
-                    # === 修复：等待时间延长至 60 秒 ===
                     page.wait_for_url("**/index.html*", timeout=60000)
                     
                     try:
@@ -148,13 +158,13 @@ class SAPController:
                     except Exception:
                         pass
                     
-                    logger.info("[+] 登录成功，正在调用API...")
+                    logger.info(f"[+] 账号 {acc_id} 登录成功，正在调用API...")
                     req_headers = {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
-                    ws_api_url = f"{REGION_URL}/ws-manager/api/v1/workspace"
+                    ws_api_url = f"{region_url}/ws-manager/api/v1/workspace"
                     workspaces = api_request.get(ws_api_url, headers=req_headers).json()
                     
                     if not workspaces:
-                        logger.error("未找到任何工作区")
+                        logger.error(f"账号 {acc_id} 未找到任何工作区")
                         return False
                         
                     ws = workspaces[0]
@@ -169,7 +179,7 @@ class SAPController:
                     
                     def set_status(target_suspend, target_status):
                         encoded_username = urllib.parse.quote(username)
-                        action_url = f"{REGION_URL}/ws-manager/api/v1/workspace/{ws_uuid}?all=false&username={encoded_username}"
+                        action_url = f"{region_url}/ws-manager/api/v1/workspace/{ws_uuid}?all=false&username={encoded_username}"
                         headers = {"X-CSRF-Token": csrf_token, "Content-Type": "application/json", "X-Requested-With": "XMLHttpRequest"}
                         payload = {"suspended": target_suspend, "WorkspaceDisplayName": display_name}
                         api_request.put(action_url, headers=headers, data=payload)
@@ -178,58 +188,60 @@ class SAPController:
                             time.sleep(10)
                             curr_ws = next((w for w in api_request.get(ws_api_url, headers=req_headers).json() if w.get("id") == ws_uuid or w.get("config", {}).get("id") == ws_uuid), {})
                             curr_status = curr_ws.get("runtime", {}).get("status", "UNKNOWN")
-                            logger.info(f"[-] 状态轮询: 期望={target_status}, 当前={curr_status}")
+                            logger.info(f"[-] 账号 {acc_id} 状态轮询: 期望={target_status}, 当前={curr_status}")
                             if curr_status == target_status:
                                 return True
                         return False
 
                     if action_type in ["RESTART", "STOP"] and status == "RUNNING":
-                        logger.info("[*] 正在执行停止操作...")
+                        logger.info(f"[*] 账号 {acc_id} 正在执行停止操作...")
                         if set_status(True, "STOPPED"):
-                            logger.info("[+] 工作区已停止")
+                            logger.info(f"[+] 账号 {acc_id} 工作区已停止")
                             status = "STOPPED"
                     
+                    # === 修复点 1：补齐 /stop 成功后的独立状态通知 ===
                     if action_type == "STOP":
+                        msg = f"🔴 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已成功停止服务！"
+                        send_tg_msg(msg)
+                        logger.info(f"[+] 账号 {acc_id} STOP 任务结束，已发送通知。")
                         return True
                         
                     if action_type in ["START", "RESTART", "KEEPALIVE"] and status in ["STOPPED", "STARTING", "RUNNING"]:
                         if status == "STOPPED":
-                            logger.info("[*] 正在执行启动操作...")
+                            logger.info(f"[*] 账号 {acc_id} 正在执行启动操作...")
                             if not set_status(False, "RUNNING"):
-                                logger.error("[!] 启动超时")
+                                logger.error(f"[!] 账号 {acc_id} 启动超时")
                                 return False
                                 
-                        logger.info("[*] 开始进行 UI 穿透...")
-                        page.goto(f"{REGION_URL}/index.html")
+                        logger.info(f"[*] 账号 {acc_id} 开始进行 UI 穿透...")
+                        page.goto(f"{region_url}/index.html")
                         time.sleep(8)
                         
                         ws_frame = page.frame_locator("iframe#ws-manager")
                         ws_link = ws_frame.locator(f"a[href*='{ws_uuid}']").first
                         ws_link.wait_for(state="visible", timeout=20000)
                         ws_link.click(force=True)
-                        logger.info("[-]正在加载 IDE (等待30秒)...")
+                        logger.info(f"[-] 账号 {acc_id} 正在加载 IDE (等待30秒)...")
                         time.sleep(30)
                         
-                        logger.info("[-] 执行弹窗清理策略...")
+                        logger.info(f"[-] 账号 {acc_id} 执行弹窗清理策略...")
                         for _ in range(3):
                             page.keyboard.press("Escape")
                             time.sleep(0.5)
                                 
-                        screenshot_path = f"{work_dir}/capture_{ws_uuid}.png"
+                        screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
-                            send_tg_photo(screenshot_path, f"🎯 <b>[{action_type}] 任务完成</b>\n工作区 [<b>{display_name}</b>] 隧道已唤醒！")
-                        logger.info(f"[+] 🎯 [{action_type}] 任务成功，发送截图...")
+                            send_tg_photo(screenshot_path, f"🎯 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 隧道已唤醒！")
+                        logger.info(f"[+] 🎯 账号 {acc_id} [{action_type}] 任务成功。")
                         return True
                         
                 except Exception as inner_e:
-                    logger.error(f"[!] 严重异常 (内部): {str(inner_e)}")
-                    # === 临终遗照 (Death Cam) 捕捉机制 ===
+                    logger.error(f"[!] 账号 {acc_id} 严重异常: {str(inner_e)}")
                     try:
-                        error_shot = f"{work_dir}/error_crash_{action_type}.png"
+                        error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
-                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常</b>\n请查看云端实时截图排查问题。\n报错: <code>{str(inner_e)}</code>")
-                        logger.info("[-] 已成功截取并发送崩溃现场截图。")
+                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常 (账号 {acc_id})</b>\n请查看云端实时截图排查问题。\n报错: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
                         logger.error(f"保存崩溃截图失败: {pic_e}")
                     return False
@@ -240,20 +252,31 @@ class SAPController:
             return False
 
 # ==========================================
-# 5. 任务调度逻辑
+# 5. 任务并发调度控制逻辑
 # ==========================================
-def async_task_runner(action, tg_reply_msg=None):
+def async_task_runner(action, account):
+    """供定时任务使用的单发运行器 (非阻塞抢锁)"""
     if not action_lock.acquire(blocking=False):
-        logger.warning(f"被跳过：系统繁忙，无法执行 {action}。")
-        if tg_reply_msg: send_tg_msg("⚠️ 系统繁忙，请稍后再试。")
+        logger.warning(f"被跳过：账号 {account['id']} 尝试 {action}，但系统繁忙 (锁占用)。请检查是否发生撞车！")
         return
-        
     try:
-        if tg_reply_msg: send_tg_msg(f"✅ 收到指令：正在执行 <b>{action}</b>...")
-        SAPController.execute_lifecycle_action(action)
+        SAPController.execute_lifecycle_action(action, account)
     finally:
         action_lock.release()
-        logger.info(f"[{action}] 任务结束。")
+
+def bot_action_runner(action):
+    """供机器人手动调用的全局串行运行器"""
+    if not action_lock.acquire(blocking=False):
+        send_tg_msg("⚠️ 系统当前有任务正在执行，请等待几分钟释放锁后再试。")
+        return
+    try:
+        send_tg_msg(f"✅ 收到指令：即将为 <b>{len(ACCOUNTS)} 个账号</b> 依次串行执行 <b>{action}</b>...")
+        for acc in ACCOUNTS:
+            SAPController.execute_lifecycle_action(action, acc)
+            time.sleep(3) # 账号切换缓冲期
+        send_tg_msg(f"🎉 <b>全部账号的 {action} 指令下发执行完毕！</b>")
+    finally:
+        action_lock.release()
 
 # ==========================================
 # 6. Telegram Bot ChatOps
@@ -262,28 +285,48 @@ if bot:
     @bot.message_handler(commands=['sap'])
     def handle_help(message):
         if not check_tg_auth(message): return
-        bot.reply_to(message, "🤖 <b>SAP BAS 机器人</b>\n🔹 /status 🔹 /stop 🔹 /start 🔹 /restart", parse_mode="HTML")
+        # === 修复点 2：改回老极客风格的竖向菜单面板 ===
+        help_text = (
+            "🤖 <b>SAP BAS 监控机器人</b>\n\n"
+            "--- 可用命令 ---\n"
+            "🔹 /status (查询云端 BAS 实时状态)\n"
+            "🔹 /stop (强制停止 BAS 容器)\n"
+            "🔹 /start (唤醒并穿透 BAS 隧道)\n"
+            "🔹 /restart (完全重置 BAS 生命周期)"
+        )
+        bot.reply_to(message, help_text, parse_mode="HTML")
 
     @bot.message_handler(commands=['status'])
     def handle_status(message):
         if not check_tg_auth(message): return
-        sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
-        bot.reply_to(message, "正在查询云端，请稍候...", parse_mode="HTML")
-        success, ws_id, status = SAPController.get_workspace_info()
-        bot.send_message(TG_CHAT_ID, f"📊 后台锁: {sys_status}\n☁️ 云端状态: <b>{status}</b>", parse_mode="HTML")
+        bot.reply_to(message, f"⏳ 正在逐一查询 {len(ACCOUNTS)} 个账号的云端状态，稍候...", parse_mode="HTML")
+        
+        # 放到后台跑，防止请求 SAP API 太慢导致 Telegram bot 超时
+        def _check():
+            sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
+            report = f"📊 <b>全局后台锁</b>: {sys_status}\n\n"
+            
+            for acc in ACCOUNTS:
+                success, ws_id, status = SAPController.get_workspace_info(acc)
+                report += f"👤 <b>账号 {acc['id']}</b> ({acc['email']})\n"
+                report += f"☁️ 状态: <b>{status}</b>\n\n"
+            
+            bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
+            
+        threading.Thread(target=_check).start()
 
     @bot.message_handler(commands=['start', 'stop', 'restart'])
     def handle_actions(message):
         if not check_tg_auth(message): return
         command = message.text.replace("/", "").upper()
-        threading.Thread(target=async_task_runner, args=(command, True)).start()
+        # 丢进全局串行器去跑
+        threading.Thread(target=bot_action_runner, args=(command,)).start()
 
 # ==========================================
 # 7. Flask Web 守护服务 (内嵌 HTML 模板)
 # ==========================================
 app = Flask(__name__)
 
-# 内嵌 1Panel 极客终端风格 HTML
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh">
@@ -303,7 +346,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header">
-        <div class="title">🚀 SAP BAS 保活终端</div>
+        <div class="title">🚀 SAP BAS 运维监控舱</div>
         <div>● 运行中 (刷新: 3s)</div>
     </div>
     <div id="terminal"></div>
@@ -335,7 +378,6 @@ HTML_TEMPLATE = """
 def health_check():
     return jsonify({"status": "OK"}), 200
 
-# === 核心修改：极其隐蔽的独立路由 (域名/你的token) ===
 @app.route('/<token>')
 def view_logs(token):
     if token != WEB_TOKEN:
@@ -357,16 +399,22 @@ def start_bot_polling():
 
 if __name__ == '__main__':
     logger.info("========================================")
-    logger.info("🚀 SAP BAS 自动保活 开始启动...")
+    logger.info(f"🚀 SAP 微服务引擎 开始点火! 检测到 {len(ACCOUNTS)} 个有效账号。")
     
+    if not ACCOUNTS:
+        logger.error("[!] 未检测到任何带有 SAP_EMAIL_X 后缀的账号环境变量，程序无法运行！")
+        sys.exit(1)
+        
     scheduler = BackgroundScheduler()
-    scheduler.add_job(lambda: async_task_runner("KEEPALIVE"), trigger='cron', minute=JOBA_MINUTE, id='job_keepalive')
-    scheduler.add_job(lambda: async_task_runner("RESTART"), trigger='cron', hour=JOBB_HOURS, minute=JOBB_MINUTE, id='job_restart')
+    for acc in ACCOUNTS:
+        scheduler.add_job(lambda a=acc: async_task_runner("KEEPALIVE", a), trigger='cron', minute=acc['joba_min'], id=f"job_keepalive_{acc['id']}")
+        scheduler.add_job(lambda a=acc: async_task_runner("RESTART", a), trigger='cron', hour=acc['jobb_hrs'], minute=acc['jobb_min'], id=f"job_restart_{acc['id']}")
+        logger.info(f"[+] 账号 {acc['id']} 定时器挂载完毕 (保活: 每小时 {acc['joba_min']}分 | 重启: 每 {acc['jobb_hrs']} 的 {acc['jobb_min']}分)")
+
     scheduler.start()
-    logger.info(f"[+] 保活任务 (访问保活: 每小时:{JOBA_MINUTE}, 定时重启: {JOBB_HOURS}:{JOBB_MINUTE})")
 
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info(f"[+] Web 日志启动")
+    logger.info(f"[+] Web 日志面板服务已就绪，端口: {PORT}")
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)

@@ -447,7 +447,7 @@ if __name__ == '__main__':
     for acc in ACCOUNTS:
         scheduler.add_job(lambda a=acc: async_task_runner("KEEPALIVE", a), trigger='cron', minute=acc['joba_min'], id=f"job_keepalive_{acc['id']}")
         scheduler.add_job(lambda a=acc: async_task_runner("RESTART", a), trigger='cron', hour=acc['jobb_hrs'], minute=acc['jobb_min'], id=f"job_restart_{acc['id']}")
-        logger.info(f"[+] 账号 {acc['id']} 定时器挂载完毕 (保活: 每小时 {acc['joba_min']}分 | 重启: 每天 {acc['jobb_hrs']} 小时 {acc['jobb_min']}分)")
+        logger.info(f"[+] 账号 {acc['id']} 定时器挂载完毕 (保活: 每小时 {acc['joba_min']}分 | 重启: 每天 {acc['jobb_hrs']} 时 {acc['jobb_min']}分)")
 
     scheduler.start()
 

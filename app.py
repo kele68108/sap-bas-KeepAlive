@@ -264,7 +264,7 @@ class SAPController:
                     try:
                         error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
-                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常 (账号 {acc_id})</b>\n请查看云端实时截图排查问题。\n报错: <code>{str(inner_e)}</code>")
+                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常 (账号 {acc_id})</b>\n请查看BAS实时截图排查问题。\n报错: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
                         logger.error(f"保存崩溃截图失败: {pic_e}")
                     return False
@@ -547,7 +547,7 @@ def web_command(token):
             logger.info(f"📊 [查询报告] 全局后台锁: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                logger.info(f"👤 账号 {acc['id']} ({acc['email']}) -> ☁️ 云端真实状态: {status}")
+                logger.info(f"👤 账号 {acc['id']} ({acc['email']}) -> ☁️ BAS真实状态: {status}")
                 
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})
@@ -587,9 +587,9 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:已启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:已启用)")
         else:
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:未启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:未启用)")
 
     scheduler.start()
 

@@ -20,7 +20,7 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 WEB_TOKEN = os.environ.get("WEB_TOKEN", "default_token")
 PORT = int(os.environ.get("PORT", 8080))
 
-# [新增功能 1] URL 自动格式化函数 (自动识别并补全 https://)
+# URL 自动格式化函数 (自动识别并补全 https://)
 def format_url(url_str):
     if not url_str:
         return None
@@ -40,11 +40,11 @@ for i in range(1, 11):
             "id": i,
             "email": email,
             "password": os.environ.get(f"SAP_PASSWORD_{i}"),
-            "region_url": format_url(os.environ.get(f"REGION_URL_{i}")), # 自动补全 https
+            "region_url": format_url(os.environ.get(f"REGION_URL_{i}")),
             "joba_min": os.environ.get(f"JOBA_MINUTE_{i}", "50"),
             "jobb_hrs": os.environ.get(f"JOBB_HOURS_{i}", "*/12"),
             "jobb_min": os.environ.get(f"JOBB_MINUTE_{i}", "30"),
-            "tunnel_url": format_url(os.environ.get(f"TUNNEL_URL_{i}")), # 自动补全 https
+            "tunnel_url": format_url(os.environ.get(f"TUNNEL_URL_{i}")),
             "fail_count": 0
         })
 
@@ -331,7 +331,6 @@ def tunnel_health_check(account):
         
     acc_id = account['id']
     
-    # [新增功能 2] 无论状态如何，都将其显式打印，使其能在终端流中滚动
     if 400 <= status_code < 500:
         logger.info(f"[-] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🟢 隧道在线")
         if account['fail_count'] > 0:
@@ -347,6 +346,17 @@ def tunnel_health_check(account):
             account['fail_count'] = 0
             send_tg_msg(f"🚨 <b>隧道掉线警报 (账号 {acc_id})</b>\n检测到 HTTP 50x 或无法连接，连续 5 次心跳失败，正在触发紧急重置！")
             threading.Thread(target=bot_action_runner, args=("RESTART", acc_id)).start()
+
+# [新增功能] 自动清理探针日志
+def clean_probe_logs():
+    try:
+        # 保留不包含 "隧道探针" 的所有核心日志
+        filtered_logs = [log for log in list(log_queue) if "隧道探针" not in log]
+        log_queue.clear()
+        log_queue.extend(filtered_logs)
+        logger.info("[*] 🧹 内存清理: 已自动清空过去 1 小时内的隧道探针常规日志，保持面板极简。")
+    except Exception as e:
+        logger.error(f"[!] 探针日志清理失败: {str(e)}")
 
 # ==========================================
 # 6. Telegram Bot ChatOps
@@ -403,10 +413,11 @@ if bot:
         threading.Thread(target=bot_action_runner, args=(command, target_id)).start()
 
 # ==========================================
-# 7. Flask Web 守护服务 (全新交互式终端)
+# 7. Flask Web 守护服务 (极致美化前端)
 # ==========================================
 app = Flask(__name__)
 
+# 全新果冻玻璃质感 MacOS 终端风格 HTML
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh">
@@ -415,52 +426,108 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SAP BAS KEEPALIVE 终端</title>
     <style>
-        body { background-color: #1e1e1e; color: #0f0; font-family: 'Consolas', monospace; margin: 0; padding: 20px; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
-        .header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; }
-        .title { font-size: 1.2rem; font-weight: bold; color: #fff; }
-        #terminal { flex: 1; overflow-y: auto; background-color: #000; padding: 15px; border-radius: 5px; box-shadow: inset 0 0 10px rgba(0,0,0,0.8); line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
-        .log-line { margin: 0; }
-        .INFO { color: #0f0; } .WARNING { color: #fc0; } .ERROR { color: #f33; }
-        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #1e1e1e; } ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        :root { --main-bg: #050505; --term-bg: #0a0a0a; --green: #00ff41; --green-glow: #00ff4133; }
+        body { background: var(--main-bg); color: var(--green); font-family: 'Consolas', 'Fira Code', monospace; margin: 0; padding: 2vh 5vw; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
         
-        #input-area { display: flex; margin-top: 15px; border-top: 1px solid #333; padding-top: 15px; align-items: center; }
-        #cmd-prefix { color: #0f0; margin-right: 10px; font-weight: bold; font-size: 1.1rem; }
-        #cmdInput { flex: 1; background: transparent; border: none; color: #fff; font-family: 'Consolas', monospace; font-size: 1.1rem; outline: none; }
-        #cmdInput::placeholder { color: #555; }
+        /* 终端主体带阴影和圆角 */
+        .terminal-container { flex: 1; display: flex; flex-direction: column; background: var(--term-bg); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 0 1px #333; overflow: hidden; margin-bottom: 10px; }
+        
+        /* MacOS 风格顶栏 */
+        .header { background: #1a1a1a; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
+        .mac-btns { display: flex; gap: 8px; }
+        .mac-btn { width: 12px; height: 12px; border-radius: 50%; }
+        .btn-close { background: #ff5f56; } .btn-min { background: #ffbd2e; } .btn-max { background: #27c93f; }
+        .title { font-weight: bold; color: #ccc; font-size: 0.9rem; letter-spacing: 1px; }
+        
+        /* 闪烁状态灯 */
+        .status-indicator { font-size: 0.85rem; color: var(--green); display: flex; align-items: center; gap: 6px; }
+        .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        
+        /* 日志输出区 */
+        #terminal { flex: 1; overflow-y: auto; padding: 20px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+        .log-line { margin: 2px 0; text-shadow: 0 0 2px var(--green-glow); }
+        .INFO { color: var(--green); } .WARNING { color: #ffb86c; } .ERROR { color: #ff5555; }
+        
+        /* 命令点击按钮样式 (核心优化) */
+        .cmd-clickable { color: #8be9fd; background: #282a36; padding: 1px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; border: 1px solid #6272a4; margin: 0 2px; font-weight: bold;}
+        .cmd-clickable:hover { background: #6272a4; color: #fff; box-shadow: 0 0 8px #8be9fd; }
+        
+        /* 极客输入框 */
+        #input-area { background: #111; padding: 15px 20px; display: flex; align-items: center; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5), 0 0 0 1px #333; }
+        #cmd-prefix { color: #ff79c6; margin-right: 12px; font-weight: bold; font-size: 15px;}
+        #cmdInput { flex: 1; background: transparent; border: none; color: #f8f8f2; font-family: inherit; font-size: 15px; outline: none; }
+        #cmdInput::placeholder { color: #6272a4; }
+        
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: var(--term-bg); } ::-webkit-scrollbar-thumb { background: #444; border-radius: 5px; } ::-webkit-scrollbar-thumb:hover { background: #666; }
+        
+        /* 静默 Toast 提示窗 */
+        #toast { position: fixed; bottom: 80px; right: 5vw; background: #282a36; color: #50fa7b; padding: 10px 20px; border-radius: 6px; border: 1px solid #50fa7b; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.6); font-weight: bold; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div class="title">🚀 SAP BAS KEEPALIVE 终端</div>
-        <div>● 运行中 (刷新: 3s)</div>
+    <div class="terminal-container">
+        <div class="header">
+            <div class="mac-btns">
+                <div class="mac-btn btn-close"></div><div class="mac-btn btn-min"></div><div class="mac-btn btn-max"></div>
+            </div>
+            <div class="title">🚀 SAP BAS KEEPALIVE</div>
+            <div class="status-indicator"><div class="dot"></div>运行中 (刷新:3s)</div>
+        </div>
+        <div id="terminal"></div>
     </div>
-    <div id="terminal"></div>
     
     <div id="input-area">
-        <span id="cmd-prefix">请输入 /sap 获取可用命令：</span>
-        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。">
+        <span id="cmd-prefix">root@bas:~#</span>
+        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="输入指令 或 点击上方蓝字快捷复制 (例如填入 /start 1)">
     </div>
+
+    <div id="toast">已静默复制指令 🚀</div>
 
     <script>
         const terminal = document.getElementById('terminal');
         const cmdInput = document.getElementById('cmdInput');
+        const toast = document.getElementById('toast');
         let autoScroll = true;
 
         terminal.addEventListener('scroll', () => { 
             autoScroll = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10; 
         });
 
+        // 全新：指令点击、复制、并自动填入输入框函数
+        window.copyToInput = function(cmdText) {
+            // 填入输入框并加一个空格，方便用户补数字 ID
+            cmdInput.value = cmdText + ' ';
+            cmdInput.focus();
+            
+            // 静默复制到剪贴板
+            navigator.clipboard.writeText(cmdText).catch(err => {});
+            
+            // 弹出炫酷的 Toast 气泡
+            toast.innerText = `已静默填入指令: ${cmdText}`;
+            toast.style.opacity = '1';
+            setTimeout(() => { toast.style.opacity = '0'; }, 2000);
+        }
+
         async function fetchLogs() {
             try {
                 const res = await fetch(`/api/{{ token }}`);
                 if (res.status !== 200) { terminal.innerHTML = '<span class="ERROR">[!] 鉴权失败或异常</span>'; return; }
                 const data = await res.json();
+                
                 terminal.innerHTML = data.logs.map(log => {
                     let cls = 'INFO';
                     if (log.includes('[WARNING]')) cls = 'WARNING';
                     if (log.includes('[ERROR]') || log.includes('失败') || log.includes('异常') || log.includes('🚨')) cls = 'ERROR';
-                    return `<p class="log-line ${cls}">${log}</p>`;
+                    
+                    // 神奇魔法：利用正则表达式，自动将 /status 等命令变成可点击的蓝色发光按钮
+                    let formattedLog = log.replace(/(\\/(?:status|stop|start|restart|sap)\\b)/g, 
+                        '<span class="cmd-clickable" onclick="copyToInput(\\'$1\\')">$1</span>');
+                        
+                    return `<p class="log-line ${cls}">${formattedLog}</p>`;
                 }).join('');
+                
                 if (autoScroll) terminal.scrollTop = terminal.scrollHeight;
             } catch (e) {}
         }
@@ -552,7 +619,6 @@ def web_command(token):
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})
         
-    # [新增功能 3] /sap 命令输出竖向可用命令
     elif command == 'sap':
         logger.info("------ 可用命令 ------")
         logger.info("🔹 /status   ( 查询 BAS )")
@@ -569,7 +635,7 @@ def web_command(token):
 # 8. 启动引导区
 # ==========================================
 def start_bot_polling():
-    logger.info("[*] TG Bot 已上线...")
+    logger.info("[*] TG BOT 已上线...")
     bot.infinity_polling()
 
 if __name__ == '__main__':
@@ -587,9 +653,12 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:已启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO探针:已启用)")
         else:
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:未启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO探针:未启用)")
+
+    # [新增功能 2] 每 1 小时自动清理内存中多余的探针日志
+    scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 
     scheduler.start()
 
@@ -598,7 +667,6 @@ if __name__ == '__main__':
 
     logger.info(f"[+] Web 终端面板已就绪！")
     
-    # 强行在面板就绪后，立刻触发一次探针检测，确保探针结果第一时间显示在终端的最下方
     for acc in ACCOUNTS:
         if acc.get('tunnel_url'):
             threading.Thread(target=tunnel_health_check, args=(acc,)).start()

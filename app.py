@@ -479,8 +479,8 @@ HTML_TEMPLATE = """
     </div>
     
     <div id="input-area">
-        <span id="cmd-prefix">root@bas:~#</span>
-        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="输入指令 或 点击上方蓝字快捷复制 (例如填入 /start 1)">
+        <span id="cmd-prefix">请输入 /sap 查询可用命令</span>
+        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。">
     </div>
 
     <div id="toast">已静默复制指令 🚀</div>
@@ -505,7 +505,7 @@ HTML_TEMPLATE = """
             navigator.clipboard.writeText(cmdText).catch(err => {});
             
             // 弹出炫酷的 Toast 气泡
-            toast.innerText = `已静默填入指令: ${cmdText}`;
+            toast.innerText = `已自动填入指令: ${cmdText} 按回车执行`;
             toast.style.opacity = '1';
             setTimeout(() => { toast.style.opacity = '0'; }, 2000);
         }
@@ -620,7 +620,7 @@ def web_command(token):
         return jsonify({"status": "Checking status"})
         
     elif command == 'sap':
-        logger.info("------ 可用命令 ------")
+        logger.info("--------- 可用命令 ---------")
         logger.info("🔹 /status   ( 查询 BAS )")
         logger.info("🔹 /stop     ( 停止 BAS )")
         logger.info("🔹 /start    ( 启动 BAS )")

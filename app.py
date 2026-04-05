@@ -176,7 +176,7 @@ class SAPController:
                         
                         for _ in range(30):
                             time.sleep(10)
-                            curr_ws = next((w for w in api_request.get(ws_api_url, headers=req_headers).json() if w.get("id") == ws_uuid), {})
+                            curr_ws = next((w for w in api_request.get(ws_api_url, headers=req_headers).json() if w.get("id") == ws_uuid or w.get("config", {}).get("id") == ws_uuid), {})
                             curr_status = curr_ws.get("runtime", {}).get("status", "UNKNOWN")
                             logger.info(f"[-] 状态轮询: 期望={target_status}, 当前={curr_status}")
                             if curr_status == target_status:
@@ -303,7 +303,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header">
-        <div class="title">🚀 SAP BAS 运维终端</div>
+        <div class="title">🚀 SAP BAS 保活终端</div>
         <div>● 运行中 (刷新: 3s)</div>
     </div>
     <div id="terminal"></div>
@@ -357,16 +357,16 @@ def start_bot_polling():
 
 if __name__ == '__main__':
     logger.info("========================================")
-    logger.info("🚀 SAP 单文件微服务引擎 开始点火...")
+    logger.info("🚀 SAP BAS 自动保活 开始启动...")
     
     scheduler = BackgroundScheduler()
     scheduler.add_job(lambda: async_task_runner("KEEPALIVE"), trigger='cron', minute=JOBA_MINUTE, id='job_keepalive')
     scheduler.add_job(lambda: async_task_runner("RESTART"), trigger='cron', hour=JOBB_HOURS, minute=JOBB_MINUTE, id='job_restart')
     scheduler.start()
-    logger.info(f"[+] 调度器挂载 (JobA: XX:{JOBA_MINUTE}, JobB: {JOBB_HOURS}:{JOBB_MINUTE})")
+    logger.info(f"[+] 保活任务 (JobA: 每小时:{JOBA_MINUTE}, JobB: {JOBB_HOURS}:{JOBB_MINUTE})")
 
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info(f"[+] Web 服务启动，端口: {PORT}")
+    logger.info(f"[+] Web 日志启动")
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)

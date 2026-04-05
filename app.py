@@ -35,11 +35,10 @@ for i in range(1, 11):
             "jobb_min": os.environ.get(f"JOBB_MINUTE_{i}", "30"),
         })
 
-# ！！！核心全局锁：确保任何时候只有一个无头浏览器在运行，防爆内存 ！！！
 action_lock = threading.Lock()
 
 # ==========================================
-# 2. 极客级内存日志系统 (Log Hijacking)
+# 2. 极客级内存日志系统
 # ==========================================
 log_queue = deque(maxlen=2000)
 
@@ -199,7 +198,6 @@ class SAPController:
                             logger.info(f"[+] 账号 {acc_id} 工作区已停止")
                             status = "STOPPED"
                     
-                    # === 修复点 1：补齐 /stop 成功后的独立状态通知 ===
                     if action_type == "STOP":
                         msg = f"🔴 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已成功停止服务！"
                         send_tg_msg(msg)
@@ -252,61 +250,83 @@ class SAPController:
             return False
 
 # ==========================================
-# 5. 任务并发调度控制逻辑
+# 5. 任务并发调度控制逻辑 (新增 target_id 过滤)
 # ==========================================
 def async_task_runner(action, account):
-    """供定时任务使用的单发运行器 (非阻塞抢锁)"""
+    """供定时任务使用的单发运行器"""
     if not action_lock.acquire(blocking=False):
-        logger.warning(f"被跳过：账号 {account['id']} 尝试 {action}，但系统繁忙 (锁占用)。请检查是否发生撞车！")
+        logger.warning(f"被跳过：账号 {account['id']} 尝试 {action}，但系统繁忙。")
         return
     try:
         SAPController.execute_lifecycle_action(action, account)
     finally:
         action_lock.release()
 
-def bot_action_runner(action):
-    """供机器人手动调用的全局串行运行器"""
+def bot_action_runner(action, target_id=None):
+    """供机器人手动调用的全局串行运行器 (支持单账号)"""
     if not action_lock.acquire(blocking=False):
-        send_tg_msg("⚠️ 系统当前有任务正在执行，请等待几分钟释放锁后再试。")
+        send_tg_msg("⚠️ 系统当前有任务正在执行，请等待释放锁后再试。")
         return
     try:
-        send_tg_msg(f"✅ 收到指令：即将为 <b>{len(ACCOUNTS)} 个账号</b> 依次串行执行 <b>{action}</b>...")
-        for acc in ACCOUNTS:
+        # 过滤目标账号
+        target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
+        
+        if not target_accounts:
+            send_tg_msg(f"❌ 未找到 ID 为 <b>{target_id}</b> 的账号配置！")
+            return
+            
+        if target_id:
+            send_tg_msg(f"✅ 收到指令：即将为 <b>账号 {target_id}</b> 执行 <b>{action}</b>...")
+        else:
+            send_tg_msg(f"✅ 收到指令：即将为 <b>{len(target_accounts)} 个账号</b> 依次串行执行 <b>{action}</b>...")
+            
+        for acc in target_accounts:
             SAPController.execute_lifecycle_action(action, acc)
-            time.sleep(3) # 账号切换缓冲期
-        send_tg_msg(f"🎉 <b>全部账号的 {action} 指令下发执行完毕！</b>")
+            if len(target_accounts) > 1:
+                time.sleep(3) # 多账号切换缓冲
+                
+        send_tg_msg(f"🎉 <b>{action} 指令下发执行完毕！</b>")
     finally:
         action_lock.release()
 
 # ==========================================
-# 6. Telegram Bot ChatOps
+# 6. Telegram Bot ChatOps (支持带参数)
 # ==========================================
 if bot:
     @bot.message_handler(commands=['sap'])
     def handle_help(message):
         if not check_tg_auth(message): return
-        # === 修复点 2：改回老极客风格的竖向菜单面板 ===
         help_text = (
             "🤖 <b>SAP BAS 监控机器人</b>\n\n"
             "--- 可用命令 ---\n"
-            "🔹 /status (查询云端 BAS 实时状态)\n"
-            "🔹 /stop (强制停止 BAS 容器)\n"
-            "🔹 /start (唤醒并穿透 BAS 隧道)\n"
-            "🔹 /restart (完全重置 BAS 生命周期)"
+            "🔹 /status [id] (查询云端实时状态)\n"
+            "🔹 /stop [id] (强制停止 BAS 容器)\n"
+            "🔹 /start [id] (唤醒并穿透 BAS 隧道)\n"
+            "🔹 /restart [id] (完全重置生命周期)\n\n"
+            "💡 <i>提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有。</i>"
         )
         bot.reply_to(message, help_text, parse_mode="HTML")
 
     @bot.message_handler(commands=['status'])
     def handle_status(message):
         if not check_tg_auth(message): return
-        bot.reply_to(message, f"⏳ 正在逐一查询 {len(ACCOUNTS)} 个账号的云端状态，稍候...", parse_mode="HTML")
         
-        # 放到后台跑，防止请求 SAP API 太慢导致 Telegram bot 超时
+        # 解析指令后缀参数
+        parts = message.text.split()
+        target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+        target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
+        
+        if target_id and not target_accounts:
+            bot.reply_to(message, f"❌ 未找到 ID 为 {target_id} 的账号。", parse_mode="HTML")
+            return
+
+        bot.reply_to(message, f"⏳ 正在查询 {len(target_accounts)} 个账号的云端状态，稍候...", parse_mode="HTML")
+        
         def _check():
             sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
             report = f"📊 <b>全局后台锁</b>: {sys_status}\n\n"
             
-            for acc in ACCOUNTS:
+            for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
                 report += f"👤 <b>账号 {acc['id']}</b> ({acc['email']})\n"
                 report += f"☁️ 状态: <b>{status}</b>\n\n"
@@ -318,9 +338,13 @@ if bot:
     @bot.message_handler(commands=['start', 'stop', 'restart'])
     def handle_actions(message):
         if not check_tg_auth(message): return
-        command = message.text.replace("/", "").upper()
-        # 丢进全局串行器去跑
-        threading.Thread(target=bot_action_runner, args=(command,)).start()
+        
+        # 解析指令和后缀参数
+        parts = message.text.strip().split()
+        command = parts[0].replace("/", "").upper()
+        target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
+        
+        threading.Thread(target=bot_action_runner, args=(command, target_id)).start()
 
 # ==========================================
 # 7. Flask Web 守护服务 (内嵌 HTML 模板)
@@ -346,7 +370,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header">
-        <div class="title">🚀 SAP BAS 运维监控舱</div>
+        <div class="title">🚀 SAP BAS 保活终端</div>
         <div>● 运行中 (刷新: 3s)</div>
     </div>
     <div id="terminal"></div>
@@ -399,7 +423,7 @@ def start_bot_polling():
 
 if __name__ == '__main__':
     logger.info("========================================")
-    logger.info(f"🚀 SAP 微服务引擎 开始点火! 检测到 {len(ACCOUNTS)} 个有效账号。")
+    logger.info(f"🚀 SAP BAS 自动保活 开始启动 检测到 {len(ACCOUNTS)} 个有效账号。")
     
     if not ACCOUNTS:
         logger.error("[!] 未检测到任何带有 SAP_EMAIL_X 后缀的账号环境变量，程序无法运行！")
@@ -416,5 +440,5 @@ if __name__ == '__main__':
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info(f"[+] Web 日志面板服务已就绪，端口: {PORT}")
+    logger.info(f"[+] Web 日志面板已就绪")
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)

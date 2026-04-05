@@ -437,8 +437,8 @@ HTML_TEMPLATE = """
     <div id="terminal"></div>
     
     <div id="input-area">
-        <span id="cmd-prefix">请输入 /sap 获取可用命令</span>
-        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。 输入命令按回车执行">
+        <span id="cmd-prefix">请输入 /sap 获取可用命令：</span>
+        <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。">
     </div>
 
     <script>
@@ -554,7 +554,7 @@ def web_command(token):
         
     # [新增功能 3] /sap 命令输出竖向可用命令
     elif command == 'sap':
-        logger.info("--- 可用命令 ---")
+        logger.info("------ 可用命令 ------")
         logger.info("🔹 /status   ( 查询 BAS )")
         logger.info("🔹 /stop     ( 停止 BAS )")
         logger.info("🔹 /start    ( 启动 BAS )")
@@ -587,9 +587,9 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 探针:启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:已启用)")
         else:
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 探针:未启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:{acc['joba_min']}分 | 重启:{acc['jobb_hrs']}时{acc['jobb_min']}分 | 隧道探针:未启用)")
 
     scheduler.start()
 

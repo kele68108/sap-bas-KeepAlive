@@ -367,7 +367,7 @@ if bot:
         if not check_tg_auth(message): return
         help_text = (
             "🤖 <b>SAP BAS 监控机器人</b>\n\n"
-            "--------- 可用命令 ---------n\n"
+            "-------- 可用命令 --------\n\n"
             "🔹 /status   ( 查询 BAS )\n"
             "🔹 /stop     ( 停止 BAS )\n"
             "🔹 /start    ( 启动 BAS )\n"

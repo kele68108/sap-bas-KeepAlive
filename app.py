@@ -635,7 +635,7 @@ def web_command(token):
 # 8. 启动引导区
 # ==========================================
 def start_bot_polling():
-    logger.info("[*] ✈️  TG Bot 已上线...")
+    logger.info("[*] ✈️ TG Bot 已上线...")
     bot.infinity_polling()
 
 if __name__ == '__main__':

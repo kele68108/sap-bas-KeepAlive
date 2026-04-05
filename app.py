@@ -171,7 +171,21 @@ class SAPController:
                     username = ws.get("config", {}).get("username", "")
                     display_name = ws.get("config", {}).get("labels", {}).get("ws-manager.devx.sap.com/displayname", ws_uuid)
                     status = ws.get("runtime", {}).get("status")
-                    
+                    # ========================================================
+                    # 🛡️ 科学拦截：状态防重防呆机制
+                    # ========================================================
+                    if action_type == "STOP" and status == "STOPPED":
+                        msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>STOPPED</b> 状态，无需重复停止。"
+                        send_tg_msg(msg)
+                        logger.info(f"[-] 账号 {acc_id} 状态已是 STOPPED，提前退出。")
+                        return True
+                        
+                    if action_type == "START" and status == "RUNNING":
+                        msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>RUNNING</b> 状态，无需重复启动。\n💡 <i>提示：若容器在线但你的代理隧道不通，请使用 /restart 进行深度洗髓重置。</i>"
+                        send_tg_msg(msg)
+                        logger.info(f"[-] 账号 {acc_id} 状态已是 RUNNING，提前退出。")
+                        return True
+                    # ========================================================
                     csrf_headers = req_headers.copy()
                     csrf_headers["X-CSRF-Token"] = "Fetch"
                     csrf_token = api_request.get(ws_api_url, headers=csrf_headers).headers.get("x-csrf-token", "")
@@ -370,7 +384,7 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="header">
-        <div class="title">🚀 SAP BAS 保活终端</div>
+        <div class="title">🚀 SAP BAS KEEPALIVE</div>
         <div>● 运行中 (刷新: 3s)</div>
     </div>
     <div id="terminal"></div>

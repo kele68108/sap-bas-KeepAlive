@@ -21,6 +21,7 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 WEB_TOKEN = os.environ.get("WEB_TOKEN", "default_token")
 PORT = int(os.environ.get("PORT", 8080))
 
+# URL 自动格式化函数
 def format_url(url_str):
     if not url_str: return None
     url_str = url_str.strip()
@@ -28,6 +29,7 @@ def format_url(url_str):
     elif url_str.startswith("http://"): url_str = url_str[7:]
     return f"https://{url_str}"
 
+# 动态加载所有配置了 SAP_EMAIL_X 的账号
 ACCOUNTS = []
 for i in range(1, 11):
     email = os.environ.get(f"SAP_EMAIL_{i}")
@@ -276,7 +278,7 @@ class SAPController:
                     try:
                         error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
-                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常 (账号 {acc_id})</b>\n请查看云端实时截图。\n报错: <code>{str(inner_e)}</code>")
+                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常 (账号 {acc_id})</b>\n请查看云端实时截图排查。\n报错: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
                         logger.error(f"保存崩溃截图失败: {pic_e}")
                     return False
@@ -441,138 +443,137 @@ if bot:
         bot_action_runner(command, target_id)
 
 # ==========================================
-# 7. Flask Web 守护服务 (SaaS级全功能SPA前端)
+# 7. Flask Web 守护服务 (纯正 macOS 终端风格)
 # ==========================================
 app = Flask(__name__)
 
-# 全新设计的 SaaS 级前端界面 (明暗双模 + 高级鉴权)
+# 完美复刻的 macOS Terminal SPA 前端
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAP BAS KEEPALIVE</title>
+    <title>SAP BAS 云终端</title>
     <style>
-        /* 极致 CSS 变量：明暗双主题自动切换 */
-        :root[data-theme="light"] { 
-            --bg-body: #f4f5f7; --bg-card: #ffffff; --bg-head: #ffffff;
-            --border-col: #eaecf0; --text-main: #1f2937; --text-muted: #6b7280;
-            --primary: #7c3aed; --primary-hover: #6d28d9; 
-            --input-bg: #f9fafb; --shadow: 0 4px 20px rgba(0,0,0,0.04);
-            /* 日志专用色系 */
-            --term-bg: #ffffff; --log-norm: #374151; --log-info: #10b981; 
-            --log-warn: #f59e0b; --log-err: #ef4444; --cmd-bg: #ede9fe; --cmd-col: #7c3aed;
-            --toast-bg: #1f2937; --toast-text: #fff;
-        }
+        /* 纯正 macOS 终端色彩变量 */
         :root[data-theme="dark"] { 
-            --bg-body: #0f111a; --bg-card: #161821; --bg-head: #161821;
-            --border-col: #262936; --text-main: #e5e7eb; --text-muted: #9ca3af;
-            --primary: #8b5cf6; --primary-hover: #7c3aed; 
-            --input-bg: #1e212b; --shadow: 0 4px 20px rgba(0,0,0,0.3);
-            /* 日志专用色系 */
-            --term-bg: #161821; --log-norm: #d1d5db; --log-info: #34d399; 
-            --log-warn: #fbbf24; --log-err: #f87171; --cmd-bg: #2e1065; --cmd-col: #c4b5fd;
-            --toast-bg: #e5e7eb; --toast-text: #111;
+            --bg-body: #1e1e1e; --bg-window: #000000; --bg-header: #2d2d2d;
+            --text-norm: #00ff41; --text-muted: #6b7280; --border-col: #444;
+            --input-bg: #0a0a0a; --toast-bg: #282a36; --toast-text: #50fa7b;
+            --cmd-bg: #1a1a1a; --cmd-col: #8be9fd; --cmd-border: #6272a4; --cmd-hover: #444;
+            --log-info: #00ff41; --log-warn: #f59e0b; --log-err: #ef4444;
+            --shadow-window: 0 20px 50px rgba(0,0,0,0.8), 0 0 0 1px #333;
+        }
+        :root[data-theme="light"] { 
+            --bg-body: #e5e7eb; --bg-window: #ffffff; --bg-header: #f3f4f6;
+            --text-norm: #374151; --text-muted: #9ca3af; --border-col: #d1d5db;
+            --input-bg: #f9fafb; --toast-bg: #1f2937; --toast-text: #fff;
+            --cmd-bg: #f3f4f6; --cmd-col: #2563eb; --cmd-border: #93c5fd; --cmd-hover: #e5e7eb;
+            --log-info: #111827; --log-warn: #b45309; --log-err: #dc2626;
+            --shadow-window: 0 20px 50px rgba(0,0,0,0.15), 0 0 0 1px #e5e7eb;
         }
         
-        body { background: var(--bg-body); color: var(--text-main); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; display: flex; align-items: center; justify-content: center;}
+        body { background: var(--bg-body); color: var(--text-norm); font-family: 'Consolas', 'Fira Code', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; display: flex; align-items: center; justify-content: center;}
         
-        /* 视图切换 */
+        /* 视图容器 */
         #login-view, #app-view { width: 100%; height: 100%; transition: opacity 0.4s ease; position: absolute; top: 0; left: 0; }
         .hidden { opacity: 0; pointer-events: none; z-index: -1; }
-        .active { opacity: 1; pointer-events: auto; z-index: 10; display: flex; flex-direction: column; }
+        .active { opacity: 1; pointer-events: auto; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4vh 5vw; box-sizing: border-box;}
         
-        /* === 登录模块 === */
-        #login-view { display: flex; align-items: center; justify-content: center; }
-        .login-box { background: var(--bg-card); padding: 40px; border-radius: 16px; box-shadow: var(--shadow); text-align: center; border: 1px solid var(--border-col); width: 340px; transition: all 0.3s; }
-        .logo-circle { width: 64px; height: 64px; margin: 0 auto 15px; color: var(--primary); }
-        .login-box h2 { margin: 0 0 8px; color: var(--primary); font-size: 24px; letter-spacing: 1px;}
-        .login-box p { color: var(--text-muted); font-size: 14px; margin-bottom: 30px; }
-        .login-box input { width: 100%; padding: 14px; margin-bottom: 20px; border: 2px solid transparent; border-radius: 10px; background: var(--input-bg); color: var(--text-main); outline: none; font-size: 15px; text-align: center; box-sizing: border-box; transition: 0.2s;}
-        .login-box input:focus { border-color: var(--primary); background: transparent; }
-        .login-box button { width: 100%; padding: 14px; background: var(--primary); color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 8px;}
-        .login-box button:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        /* 基础 Mac 窗口样式 */
+        .mac-window { background: var(--bg-window); border-radius: 10px; box-shadow: var(--shadow-window); overflow: hidden; border: 1px solid var(--border-col); display: flex; flex-direction: column; transition: all 0.3s; width: 100%;}
+        
+        /* Mac 顶栏 */
+        .mac-header { background: var(--bg-header); height: 28px; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border-col); transition: background 0.3s; user-select: none;}
+        .mac-btns { display: flex; gap: 8px; width: 60px; align-items: center;}
+        .mac-btn { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; transition: filter 0.2s;}
+        .mac-btn:hover { filter: brightness(0.8); }
+        .btn-close { background: #ff5f56; } /* 退出 */
+        .btn-min { background: #ffbd2e; }   /* 切主题 */
+        .btn-max { background: #27c93f; cursor: default;} /* 运行灯 */
+        
+        /* 呼吸灯动画 */
+        .breathing { animation: blink 2s infinite; }
+        @keyframes blink { 0%, 100% { box-shadow: 0 0 8px #27c93f; opacity: 1; } 50% { box-shadow: none; opacity: 0.5; } }
+        
+        .mac-title { font-size: 13px; font-weight: bold; color: var(--text-muted); font-family: -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: 0.5px; text-align: center; flex: 1;}
+        .mac-spacer { width: 60px; } /* 保持标题居中对齐 */
 
-        /* === 应用模块 (顶栏 + 主体) === */
-        .navbar { height: 64px; background: var(--bg-head); display: flex; justify-content: space-between; align-items: center; padding: 0 24px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); z-index: 20; border-bottom: 1px solid var(--border-col); transition: background 0.3s;}
-        .nav-left { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: var(--primary); }
-        .nav-left svg { width: 24px; height: 24px; }
-        .nav-right { display: flex; align-items: center; gap: 16px; }
-        
-        /* 状态灯与图标按钮 */
-        .status-badge { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); background: var(--input-bg); padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border-col);}
-        .dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 6px #10b981; animation: blink 2s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 8px; display: flex; align-items: center; transition: 0.2s; }
-        .icon-btn:hover { color: var(--primary); background: var(--input-bg); }
-        .icon-btn svg { width: 20px; height: 20px; }
+        /* === 登录界面专属 === */
+        #login-view .mac-window { width: 360px; height: auto; }
+        .login-content { padding: 30px 40px 40px; text-align: center; }
+        .login-content h2 { margin: 0 0 20px; font-size: 18px; color: var(--text-norm); font-weight: normal;}
+        .login-content input { width: 100%; padding: 10px; margin-bottom: 20px; background: var(--input-bg); border: 1px solid var(--border-col); border-radius: 6px; color: var(--text-norm); font-family: 'Consolas', monospace; font-size: 14px; text-align: center; outline: none; box-sizing: border-box; transition: 0.2s;}
+        .login-content input:focus { border-color: var(--text-norm); }
+        .login-content button { width: 100%; padding: 10px; background: transparent; color: var(--text-norm); border: 1px solid var(--text-norm); border-radius: 6px; font-family: 'Consolas', monospace; font-size: 14px; cursor: pointer; transition: 0.2s; font-weight: bold;}
+        .login-content button:hover { background: var(--text-norm); color: var(--bg-window); }
 
-        /* 主体内容区 */
-        .main-content { flex: 1; padding: 24px; display: flex; justify-content: center; overflow: hidden; box-sizing: border-box; }
-        .terminal-card { width: 100%; max-width: 1400px; background: var(--term-bg); border-radius: 12px; box-shadow: var(--shadow); border: 1px solid var(--border-col); display: flex; flex-direction: column; overflow: hidden; transition: all 0.3s;}
+        /* === 终端主视图专属 === */
+        #app-view.active { justify-content: flex-start; }
+        #app-view .mac-window { flex: 1; max-width: 1400px; }
         
-        /* 日志区域 */
-        #terminal { flex: 1; overflow-y: auto; padding: 20px; line-height: 1.7; white-space: pre-wrap; word-wrap: break-word; font-family: 'Consolas', 'Fira Code', monospace; font-size: 14px; color: var(--log-norm); }
+        /* 日志输出区 */
+        #terminal { flex: 1; overflow-y: auto; padding: 20px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
         .log-line { margin: 2px 0; }
         .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } .ERROR { color: var(--log-err); font-weight: bold;}
         
         /* 可点击命令标签 */
-        .cmd-clickable { color: var(--cmd-col); background: var(--cmd-bg); padding: 2px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s; margin: 0 2px; font-weight: 600; font-family: 'Consolas', monospace;}
-        .cmd-clickable:hover { background: var(--primary); color: #fff; }
+        .cmd-clickable { color: var(--cmd-col); background: var(--cmd-bg); padding: 1px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s; border: 1px solid var(--cmd-border); margin: 0 2px; font-weight: bold;}
+        .cmd-clickable:hover { background: var(--cmd-hover); }
         
         /* 底部极简输入区 */
-        #input-area { background: var(--term-bg); padding: 16px 24px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--border-col); }
-        #input-area svg { color: var(--primary); width: 20px; height: 20px; }
-        #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-main); font-family: 'Consolas', monospace; font-size: 15px; outline: none; }
-        #cmdInput::placeholder { color: var(--text-muted); font-family: sans-serif;}
+        #input-area { background: var(--input-bg); padding: 15px 20px; display: flex; align-items: center; border-top: 1px solid var(--border-col); transition: background 0.3s;}
+        #cmd-prefix { color: #ff79c6; margin-right: 12px; font-weight: bold; font-size: 14px;}
+        #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-norm); font-family: 'Consolas', monospace; font-size: 14px; outline: none; }
+        #cmdInput::placeholder { color: var(--text-muted); }
         
         /* 滚动条 */
-        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-col); border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+        ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-col); border-radius: 5px; } ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
         
         /* Toast 气泡 */
-        #toast { position: fixed; bottom: 40px; right: 40px; background: var(--toast-bg); color: var(--toast-text); padding: 12px 24px; border-radius: 8px; opacity: 0; transition: opacity 0.3s, transform 0.3s; transform: translateY(10px); pointer-events: none; z-index: 1000; box-shadow: 0 10px 25px rgba(0,0,0,0.15); font-size: 14px; font-weight: 600;}
+        #toast { position: fixed; bottom: 80px; right: 5vw; background: var(--toast-bg); color: var(--toast-text); padding: 10px 20px; border-radius: 6px; opacity: 0; transition: opacity 0.3s, transform 0.3s; transform: translateY(10px); pointer-events: none; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-size: 13px; font-weight: bold; border: 1px solid var(--border-col);}
         #toast.show { opacity: 1; transform: translateY(0); }
     </style>
 </head>
 <body>
 
     <div id="login-view" class="active">
-        <div class="login-box">
-            <svg class="logo-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
-            </svg>
-            <h2>SAP BAS KEEPALIVE</h2>
-            <p>请输入管理员密码以继续</p>
-            <input type="password" id="loginPass" placeholder="请输入管理员密码" onkeypress="if(event.key==='Enter') doLogin()">
-            <button onclick="doLogin()">授权访问 <span>&rarr;</span></button>
+        <div class="mac-window">
+            <div class="mac-header">
+                <div class="mac-btns">
+                    <div class="mac-btn btn-close"></div>
+                    <div class="mac-btn btn-min"></div>
+                    <div class="mac-btn btn-max"></div>
+                </div>
+                <div class="mac-title">Terminal — Login</div>
+                <div class="mac-spacer"></div>
+            </div>
+            <div class="login-content">
+                <h2>SAP BAS Auth</h2>
+                <input type="password" id="loginPass" placeholder="Enter WEB_TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
+                <button onclick="doLogin()">Authorize Session</button>
+            </div>
         </div>
     </div>
 
     <div id="app-view" class="hidden">
-        <div class="navbar">
-            <div class="nav-left">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
-                SAP BAS KEEPALIVE
-            </div>
-            <div class="nav-right">
-                <div class="status-badge"><div class="dot"></div>运行中</div>
-                <button class="icon-btn" onclick="toggleTheme()" title="切换明暗主题">
-                    <svg id="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
-                </button>
-                <button class="icon-btn" onclick="doLogout()" title="退出系统">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                </button>
-            </div>
-        </div>
-        
-        <div class="main-content">
-            <div class="terminal-card">
-                <div id="terminal"></div>
-                <div id="input-area">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-                    <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。">
+        <div class="mac-window">
+            <div class="mac-header">
+                <div class="mac-btns">
+                    <div class="mac-btn btn-close" onclick="doLogout()" title="退出登录"></div>
+                    <div class="mac-btn btn-min" onclick="toggleTheme()" title="切换明暗主题"></div>
+                    <div class="mac-btn btn-max breathing" title="系统运行中"></div>
                 </div>
+                <div class="mac-title">root@sap-bas: ~</div>
+                <div class="mac-spacer"></div>
+            </div>
+            
+            <div id="terminal"></div>
+            
+            <div id="input-area">
+                <span id="cmd-prefix">root@bas:~#</span>
+                <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="输入指令 或 点击上方命令蓝字快捷复制 (例如: /sap, /start 1)">
             </div>
         </div>
     </div>
@@ -590,28 +591,20 @@ HTML_TEMPLATE = """
         let logInterval = null;
 
         // === 主题管理 ===
-        const iconMoon = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
-        const iconSun = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
-
         function initTheme() {
             let saved = localStorage.getItem('bas_theme');
             if (!saved) {
                 let h = new Date().getHours();
                 saved = (h >= 6 && h < 18) ? 'light' : 'dark';
             }
-            applyTheme(saved);
-        }
-
-        function applyTheme(theme) {
-            document.documentElement.setAttribute('data-theme', theme);
-            document.getElementById('theme-icon').innerHTML = (theme === 'dark') ? iconSun : iconMoon;
+            document.documentElement.setAttribute('data-theme', saved);
         }
 
         function toggleTheme() {
             let current = document.documentElement.getAttribute('data-theme');
             let next = (current === 'light') ? 'dark' : 'light';
             localStorage.setItem('bas_theme', next);
-            applyTheme(next);
+            document.documentElement.setAttribute('data-theme', next);
         }
 
         // === 登录管理 ===
@@ -630,9 +623,9 @@ HTML_TEMPLATE = """
                     localStorage.setItem('bas_token', pass);
                     enterSystem();
                 } else {
-                    alert('访问密钥错误，请重试！');
+                    alert('Access Denied: Invalid WEB_TOKEN');
                 }
-            } catch(e) { alert('网络通信异常，请检查后端'); }
+            } catch(e) { alert('Network Error'); }
         }
 
         function doLogout() {
@@ -661,7 +654,7 @@ HTML_TEMPLATE = """
             cmdInput.value = cmdText + ' ';
             cmdInput.focus();
             navigator.clipboard.writeText(cmdText).catch(err => {});
-            toast.innerText = `✅ 已自动填入指令: ${cmdText} 按回车执行`;
+            toast.innerText = `已快捷填入指令: ${cmdText} 按回车执行`;
             toast.className = 'show';
             setTimeout(() => { toast.className = ''; }, 2000);
         }
@@ -703,8 +696,8 @@ HTML_TEMPLATE = """
                 
                 const fakeLog = document.createElement('div');
                 fakeLog.className = 'log-line INFO';
-                fakeLog.innerText = `[${new Date().toISOString().slice(0,19).replace('T', ' ')}] 💻 本地执行: ${cmd}`;
-                fakeLog.style.color = 'var(--primary)';
+                fakeLog.innerText = `[${new Date().toISOString().slice(0,19).replace('T', ' ')}] root@bas:~# ${cmd}`;
+                fakeLog.style.color = '#ff79c6';
                 terminal.appendChild(fakeLog);
                 if (autoScroll) terminal.scrollTop = terminal.scrollHeight;
 
@@ -739,7 +732,6 @@ HTML_TEMPLATE = """
 def index():
     return HTML_TEMPLATE
 
-# [新增路由] 验证密码 Token
 @app.route('/api/verify', methods=['POST'])
 def verify_token():
     data = request.get_json()
@@ -747,7 +739,6 @@ def verify_token():
         return jsonify({"status": "OK"}), 200
     return jsonify({"error": "Unauthorized"}), 401
 
-# [修改路由] 获取日志必须 POST 携带 Token
 @app.route('/api/logs', methods=['POST'])
 def api_logs():
     data = request.get_json()
@@ -755,7 +746,6 @@ def api_logs():
         return jsonify({"error": "Unauthorized"}), 401
     return jsonify({"logs": list(log_queue)})
 
-# [修改路由] 命令下发必须 POST 携带 Token
 @app.route('/api/command', methods=['POST'])
 def web_command():
     data = request.get_json()
@@ -813,6 +803,7 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
+    logger.info("========================================")
     logger.info(f"🚀 SAP BAS 全自动保活 开始运行! 检测到 {len(ACCOUNTS)} 个有效账号。")
     
     if not ACCOUNTS:

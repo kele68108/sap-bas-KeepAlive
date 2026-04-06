@@ -452,13 +452,11 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SYS_CONSOLE</title>
     <style>
-        /* 复古赛博朋克 色彩与字体 */
         @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
         
         :root[data-theme="dark"] { 
             --bg-body: #0d1117; --bg-window: #010409; --bg-header: #161b22;
-            --text-norm: #34d399; /* 荧光绿 */
-            --text-muted: #4b5563; --border-col: #30363d;
+            --text-norm: #34d399; --text-muted: #4b5563; --border-col: #30363d;
             --input-bg: #000000; --toast-bg: #1f2937; --toast-text: #34d399;
             --cmd-bg: transparent; --cmd-col: #58a6ff; --cmd-border: #58a6ff; --cmd-hover: #1f6feb;
             --log-info: #34d399; --log-warn: #fbbf24; --log-err: #f87171;
@@ -467,8 +465,7 @@ HTML_TEMPLATE = """
         }
         :root[data-theme="light"] { 
             --bg-body: #e5e7eb; --bg-window: #f6f8fa; --bg-header: #e1e4e8;
-            --text-norm: #065f46; /* 暗黑绿 */
-            --text-muted: #6e7781; --border-col: #d0d7de;
+            --text-norm: #065f46; --text-muted: #6e7781; --border-col: #d0d7de;
             --input-bg: #ffffff; --toast-bg: #24292f; --toast-text: #ffffff;
             --cmd-bg: transparent; --cmd-col: #0969da; --cmd-border: #0969da; --cmd-hover: #033d8b;
             --log-info: #065f46; --log-warn: #b45309; --log-err: #cf222e;
@@ -828,7 +825,6 @@ HTML_TEMPLATE = """
         });
 
         // ====================== 修复登录界面事件 ======================
-        // 原有内联 onclick / onkeypress 被移除，现在统一用 addEventListener 绑定
         document.getElementById('loginBtn').addEventListener('click', doLogin);
         document.getElementById('loginPass').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {

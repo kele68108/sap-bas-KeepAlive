@@ -84,7 +84,7 @@ def send_tg_msg(text):
         try:
             bot.send_message(TG_CHAT_ID, text, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"<SYS_ERR_> TG 通知发送异常: {str(e)} [FAIL]")
+            logger.error(f"<SYS_ERR_> 远端推送接口异常: {str(e)} [FAIL]")
 
 def send_tg_photo(photo_path, caption=""):
     if bot and TG_CHAT_ID and os.path.exists(photo_path):
@@ -92,7 +92,7 @@ def send_tg_photo(photo_path, caption=""):
             with open(photo_path, 'rb') as photo:
                 bot.send_photo(TG_CHAT_ID, photo, caption=caption, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"<SYS_ERR_> TG 图片发送异常: {str(e)} [FAIL]")
+            logger.error(f"<SYS_ERR_> 图像流回传阻断: {str(e)} [FAIL]")
 
 # ==========================================
 # 4. 业务逻辑层
@@ -136,7 +136,7 @@ class SAPController:
         email = account['email']
         password = account['password']
         
-        logger.info(f"<EXEC_JOB> 开始拉起任务: [{action_type}] (账号 {acc_id})")
+        logger.info(f"<EXEC_JOB> 进程提权，执行核心序列: [{action_type}] (节点 {acc_id})")
         work_dir = "/tmp"
         
         try:
@@ -147,7 +147,7 @@ class SAPController:
                 api_request = context.request
 
                 try:
-                    logger.info(f" > AUTH_REQ 账号 {acc_id} 请求登录入口... [WAIT]")
+                    logger.info(f" > AUTH_REQ_ 节点 {acc_id} 请求建立安全隧道会话... [WAIT]")
                     page.goto(f"{region_url}/index.html")
                     page.locator("input[name='j_username'], input[type='email']").fill(email)
                     if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
@@ -169,13 +169,13 @@ class SAPController:
                     except Exception:
                         pass
                     
-                    logger.info(f" < AUTH_ACK 账号 {acc_id} 令牌下发完成，接管API... [ OK ]")
+                    logger.info(f" < AUTH_ACK_ 节点 {acc_id} 鉴权通过，已接管远端 API 总线... [ OK ]")
                     req_headers = {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
                     ws_api_url = f"{region_url}/ws-manager/api/v1/workspace"
                     workspaces = api_request.get(ws_api_url, headers=req_headers).json()
                     
                     if not workspaces:
-                        logger.error(f"[!!FATAL!!] 账号 {acc_id} 云端未挂载任何工作区实体 [FAIL]")
+                        logger.error(f"[!!FATAL!!] 节点 {acc_id} 挂载区未侦测到有效容器实体 [FAIL]")
                         return False
                         
                     ws = workspaces[0]
@@ -185,18 +185,18 @@ class SAPController:
                     status = ws.get("runtime", {}).get("status")
                     
                     if action_type == "STOP" and status == "STOPPED":
-                        msg = f"► <b>操作合并 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 已经是 <b>STOPPED</b> 状态，任务跳过。"
+                        msg = f"► <b>指令调度合并 (节点 {acc_id})</b>\n目标容器 [<b>{display_name}</b>] 已处于 <b>挂起态 (STOPPED)</b>，动作跳过。"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 STOPPED 状态 [ OK ]")
+                        logger.info(f" < TASK_END_ 节点 {acc_id} 算力已挂起，停止指令合并 [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
                         return True
                         
                     if action_type == "START" and status == "RUNNING":
-                        msg = f"► <b>操作合并 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 已经是 <b>RUNNING</b> 状态，任务跳过。\n💡 <i>若ARGO离线请使用 /restart。</i>"
+                        msg = f"► <b>指令调度合并 (节点 {acc_id})</b>\n目标容器 [<b>{display_name}</b>] 已处于 <b>运行态 (RUNNING)</b>，动作跳过。\n💡 <i>若边缘隧道阻断请使用 /restart 进行硬重置。</i>"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 RUNNING 状态 [ OK ]")
+                        logger.info(f" < TASK_END_ 节点 {acc_id} 状态已激活，唤醒指令合并 [ OK ]")
                         account['probe_paused'] = False
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -217,21 +217,21 @@ class SAPController:
                             time.sleep(10)
                             curr_ws = next((w for w in api_request.get(ws_api_url, headers=req_headers).json() if w.get("id") == ws_uuid or w.get("config", {}).get("id") == ws_uuid), {})
                             curr_status = curr_ws.get("runtime", {}).get("status", "UNKNOWN")
-                            logger.info(f" > WS_POLL_ 账号 {acc_id} 等待:{target_status}, 当前:{curr_status} [WAIT]")
+                            logger.info(f" > SYS_POLL_ 节点 {acc_id} 状态轮询: 期望={target_status}, 当前={curr_status} [WAIT]")
                             if curr_status == target_status:
                                 return True
                         return False
 
                     if action_type in ["RESTART", "STOP"] and status == "RUNNING":
-                        logger.info(f" > WS_HALT_ 账号 {acc_id} 发送休眠信令... [WAIT]")
+                        logger.info(f" > SYS_HALT_ 节点 {acc_id} 下发挂起信令，释放算力资源... [WAIT]")
                         if set_status(True, "STOPPED"):
-                            logger.info(f" < WS_HALT_ 账号 {acc_id} 容器物理挂起成功 [ OK ]")
+                            logger.info(f" < TASK_END_ 节点 {acc_id} 资源释放完成，已安全挂起 [ OK ]")
                             status = "STOPPED"
                     
                     if action_type == "STOP":
-                        msg = f"■ <b>SAP BAS 停止指令 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已成功下线资源。"
+                        msg = f"■ <b>算力释放完毕 (节点 {acc_id})</b>\n目标容器 [<b>{display_name}</b>] 已成功退回挂起状态。"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END 账号 {acc_id} STOP指令执行完毕 [ OK ]")
+                        logger.info(f" < TASK_END_ 节点 {acc_id} 强制休眠指令归档 [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -239,12 +239,12 @@ class SAPController:
                         
                     if action_type in ["START", "RESTART", "KEEPALIVE"] and status in ["STOPPED", "STARTING", "RUNNING"]:
                         if status == "STOPPED":
-                            logger.info(f" > WS_BOOT_ 账号 {acc_id} 申请分配算力资源... [WAIT]")
+                            logger.info(f" > SYS_BOOT_ 节点 {acc_id} 申请分配底层计算资源... [WAIT]")
                             if not set_status(False, "RUNNING"):
-                                logger.error(f"[!!FATAL!!] 账号 {acc_id} 容器启动严重超时 [FAIL]")
+                                logger.error(f"[!!FATAL!!] 节点 {acc_id} 资源分配超时，启动异常 [FAIL]")
                                 return False
                                 
-                        logger.info(f" > UI_PENET 账号 {acc_id} 注入无头浏览器探针... [WAIT]")
+                        logger.info(f" > UI_PENET_ 节点 {acc_id} 注入无头探测器探针... [WAIT]")
                         page.goto(f"{region_url}/index.html")
                         time.sleep(8)
                         
@@ -252,10 +252,10 @@ class SAPController:
                         ws_link = ws_frame.locator(f"a[href*='{ws_uuid}']").first
                         ws_link.wait_for(state="visible", timeout=20000)
                         ws_link.click(force=True)
-                        logger.info(f" > IDE_LOAD 账号 {acc_id} 等待 IDE 核心初始化... [WAIT]")
+                        logger.info(f" > IDE_LOAD_ 节点 {acc_id} 等待核心 IDE 构件装载... [WAIT]")
                         time.sleep(30)
                         
-                        logger.info(f" > UI_CLEAN 账号 {acc_id} 执行模态框压制策略... [WAIT]")
+                        logger.info(f" > UI_CLEAN_ 节点 {acc_id} 执行模态框静默消除策略... [WAIT]")
                         for _ in range(3):
                             page.keyboard.press("Escape")
                             time.sleep(0.5)
@@ -263,8 +263,8 @@ class SAPController:
                         screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
-                            send_tg_photo(screenshot_path, f"■ <b>SAP BAS {action_type} 完毕 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 算力节点已唤醒！")
-                        logger.info(f" < TASK_END 账号 {acc_id} [{action_type}] 任务完成 [ OK ]")
+                            send_tg_photo(screenshot_path, f"■ <b>系统唤醒完成 (节点 {acc_id})</b>\n通知：目标容器 [<b>{display_name}</b>] 算力单元已上线！")
+                        logger.info(f" < TASK_END_ 节点 {acc_id} [{action_type}] 调度流程执行成功 [ OK ]")
                         
                         account['probe_paused'] = False
                         account['fail_count'] = 0
@@ -272,18 +272,18 @@ class SAPController:
                         return True
                         
                 except Exception as inner_e:
-                    logger.error(f"[!!FATAL!!] 账号 {acc_id} 运行时抛出致命异常 [FAIL]")
+                    logger.error(f"[!!FATAL!!] 节点 {acc_id} 运行时发生内核级崩溃 [FAIL]")
                     try:
                         error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
-                        send_tg_photo(error_shot, f"▲ <b>核心执行异常 (账号 {acc_id})</b>\n动作: {action_type}\n反馈: <code>{str(inner_e)}</code>")
+                        send_tg_photo(error_shot, f"▲ <b>内核级异常警报 (节点 {acc_id})</b>\n调度指令: {action_type}\n栈追踪: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
-                        logger.error(f"<SYS_ERR_> 崩溃堆栈快照导出失败: {pic_e} [FAIL]")
+                        logger.error(f"<SYS_ERR_> 栈追踪快照导出失败: {pic_e} [FAIL]")
                     return False
                 finally:
                     browser.close()
         except Exception as e:
-            logger.error(f"[!!FATAL!!] 浏览器隔离沙盒拉起失败: {str(e)} [FAIL]")
+            logger.error(f"[!!FATAL!!] 沙盒环境拉起失败，环境异常: {str(e)} [FAIL]")
             return False
 
 # ==========================================
@@ -296,9 +296,9 @@ def enqueue_task(action, target_accounts, source):
         "source": source
     })
     if source == "MANUAL":
-        acc_str = f"账号 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全局 {len(target_accounts)} 节点"
-        msg = f"► <b>系统调度列队</b>\n目标: <b>{acc_str}</b>\n指令: <b>{action}</b>..."
-        logger.info(f"<SCHEDULR> 手动指令 [{action}] 压入系统队列 [ OK ]")
+        acc_str = f"节点 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全局 {len(target_accounts)} 个节点"
+        msg = f"► <b>调度任务入队</b>\n目标: <b>{acc_str}</b>\n指令: <b>{action}</b>..."
+        logger.info(f"<SCHEDULR> 手动调度队列 [{action}] 已覆写进内存 [ OK ]")
         send_tg_msg(msg)
 
 def global_task_worker():
@@ -316,12 +316,12 @@ def global_task_worker():
                 if len(accounts) > 1:
                     time.sleep(3)
         except Exception as e:
-            logger.error(f"<SYS_ERR_> 流水线工人线程异常: {e} [FAIL]")
+            logger.error(f"<SYS_ERR_> 调度流水线突发阻塞: {e} [FAIL]")
         finally:
             system_busy_event.clear()
             if source == "MANUAL":
-                finish_msg = "■ <b>终端报告</b>\n系统排队任务已清空，硬件锁已释放。"
-                logger.info("<SCHEDULR> 手动调度队列执行完毕，释放系统锁 [ OK ]")
+                finish_msg = "■ <b>终端报告</b>\n队列任务已清空，全局硬件锁已释放。"
+                logger.info("<SCHEDULR> 调度队列执行完毕，互斥锁已解除 [ OK ]")
                 send_tg_msg(finish_msg)
             task_queue.task_done()
 
@@ -333,8 +333,8 @@ def async_task_runner(action, account):
 def bot_action_runner(action, target_id=None):
     target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
     if not target_accounts:
-        msg = f"▲ 未匹配到目标标识 [<b>{target_id}</b>] 的参数块！"
-        logger.error(f"<SCHEDULR> 目标标识 {target_id} 索引越界或未装载 [FAIL]")
+        msg = f"▲ 映射表未匹配到标识 [<b>{target_id}</b>] 的参数块！"
+        logger.error(f"<SCHEDULR> 标识 {target_id} 索引缺失，越权被拒绝 [FAIL]")
         send_tg_msg(msg)
         return
     enqueue_task(action, target_accounts, "MANUAL")
@@ -355,39 +355,39 @@ def tunnel_health_check(account):
     acc_id = account['id']
     
     if 400 <= status_code < 500:
-        logger.info(f" > NET_PING 账号 {acc_id} 隧道心跳 (HTTP:{status_code}) ... [ OK ]")
+        logger.info(f" > NET_PING_ 节点 {acc_id} 边缘隧道稳定 (HTTP:{status_code}) ... [ OK ]")
         if account['fail_count'] > 0 or account['auto_restart_count'] > 0:
-            logger.info(f" < NET_RECV 账号 {acc_id} 数据链路恢复，重置计数器 [ OK ]")
-            send_tg_msg(f"■ <b>数据链路已恢复 (账号 {acc_id})</b>\n隧道连通性测试通过，已解除警报。")
+            logger.info(f" < NET_RECV_ 节点 {acc_id} 数据包重组成功，告警解除 [ OK ]")
+            send_tg_msg(f"■ <b>链路连接恢复 (节点 {acc_id})</b>\n边缘隧道连通性测试通过。")
         account['fail_count'] = 0
         account['auto_restart_count'] = 0
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f" > NET_PING 账号 {acc_id} 边缘节点阻断 ({account['fail_count']}/5)... [WARN]")
+        logger.warning(f" > NET_PING_ 节点 {acc_id} 边缘隧道发生丢包 ({account['fail_count']}/5)... [WARN]")
         
         if account['fail_count'] >= 5:
             if account['auto_restart_count'] >= 3:
-                logger.error(f"[!!FATAL!!] 账号 {acc_id} 连续 3 次硬启动无效，已挂起 [FAIL]")
-                send_tg_msg(f"▲ <b>硬件层级阻断 (账号 {acc_id})</b>\n连续 3 次深度重启后链路依然离线，已强制挂起探针触发器。")
+                logger.error(f"[!!FATAL!!] 节点 {acc_id} 连续 3 次硬重启均超时，探针已挂起 [FAIL]")
+                send_tg_msg(f"▲ <b>节点离线阻断 (节点 {acc_id})</b>\n连续 3 次硬重置后链路彻底断联，该节点探针已被系统强制挂起。")
                 account['probe_paused'] = True
                 account['fail_count'] = 0
                 return
                 
             account['auto_restart_count'] += 1
             account['fail_count'] = 0
-            logger.error(f"<SYS_CRIT> 账号 {acc_id} 链路丢包越界，拉起系统重置 ({account['auto_restart_count']}/3)...")
-            send_tg_msg(f"▲ <b>链路丢包告警 (账号 {acc_id})</b>\n探针连续 5 次超时，强制拉起重置序列 ({account['auto_restart_count']}/3)...")
+            logger.error(f"<SYS_CRIT> 节点 {acc_id} 丢包率越界，强制触发冷启动序列 ({account['auto_restart_count']}/3)...")
+            send_tg_msg(f"▲ <b>网络劣化告警 (节点 {acc_id})</b>\n网络探针连续 5 次超时，拉起强制重置序列 ({account['auto_restart_count']}/3)...")
             enqueue_task("RESTART", [account], "PROBE")
 
 def clean_probe_logs():
     try:
-        filtered_logs = [log for log in list(log_queue) if "NET_PING" not in log]
+        filtered_logs = [log for log in list(log_queue) if "NET_PING_" not in log]
         log_queue.clear()
         log_queue.extend(filtered_logs)
-        logger.info("<MEM_SWEEP> 常规网络嗅探流数据已从系统内存剥离 [ OK ]")
+        logger.info("<MEM_SWEEP> 常规网络嗅探冗余日志已从内存堆栈剥离 [ OK ]")
     except Exception as e:
-        logger.error(f"<SYS_ERR_> 内存清理程序陷入死锁: {str(e)} [FAIL]")
+        logger.error(f"<SYS_ERR_> 垃圾回收机制陷入死锁: {str(e)} [FAIL]")
 
 # ==========================================
 # 6. Telegram Bot ChatOps
@@ -397,13 +397,13 @@ if bot:
     def handle_help(message):
         if not check_tg_auth(message): return
         help_text = (
-            "► <b>SAP BAS MAIN_FRAME</b>\n\n"
-            "----------- 核心指令 -----------\n"
-            "❖ /status   ( 实例状态查询 )\n"
-            "❖ /stop     ( 挂起服务算力 )\n"
-            "❖ /start    ( 唤醒服务算力 )\n"
-            "❖ /restart  ( 硬重置数据流 )\n\n"
-            "<i>附加参数: 指令+数字 (例: /start 1)</i>"
+            "► <b>MAINFRAME CONSOLE</b>\n\n"
+            "--------- 主机集群控制终端 ---------\n"
+            "❖ /status   ( 节点运行状态追踪 )\n"
+            "❖ /stop     ( 强制释放计算资源 )\n"
+            "❖ /start    ( 唤醒挂起算力容器 )\n"
+            "❖ /restart  ( 硬重置数据流链路 )\n\n"
+            "<i>高维参数: 指令+编号 (例: /start 1)</i>"
         )
         bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -415,18 +415,18 @@ if bot:
         target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
         
         if target_id and not target_accounts:
-            bot.reply_to(message, f"▲ 未找到 ID 为 <b>{target_id}</b> 的配置块。", parse_mode="HTML")
+            bot.reply_to(message, f"▲ 映射表未能匹配到编号 <b>{target_id}</b> 的节点配置。", parse_mode="HTML")
             return
 
-        bot.reply_to(message, f"⧗ 正在轮询边缘节点状态...", parse_mode="HTML")
+        bot.reply_to(message, f"⧗ 正在轮询集群节点状态...", parse_mode="HTML")
         
         def _check():
-            sys_status = "■ 繁忙 (执行中)" if system_busy_event.is_set() else "■ 空闲 (挂起)"
-            report = f"► <b>系统全局列队调度锁</b>: {sys_status}\n\n"
+            sys_status = "■ 繁忙 (核心队列阻塞中)" if system_busy_event.is_set() else "■ 空闲 (全局调度锁释放)"
+            report = f"► <b>系统全局调度状态</b>: {sys_status}\n\n"
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                report += f"👤 <b>节点标识 {acc['id']}</b> ({acc['email']})\n"
-                report += f"■ 容器进程: <b>{status}</b>\n\n"
+                report += f"👤 <b>节点编号 {acc['id']}</b> ({acc['email']})\n"
+                report += f"■ 容器物理态: <b>{status}</b>\n\n"
             bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
             
         threading.Thread(target=_check).start()
@@ -522,7 +522,8 @@ HTML_TEMPLATE = """
         
         #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
         
-        #boot-sequence { flex-shrink: 0; }
+        /* 强迫症福音：给固定头部增加右侧 10px 的 padding，完美抵消下方滚动条的宽度误差 */
+        #boot-sequence { flex-shrink: 0; padding-right: 10px; }
         #live-logs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
         
         /* Flexbox Log Line */
@@ -557,7 +558,7 @@ HTML_TEMPLATE = """
         .sys-divider .line { flex: 1; height: 1px; background-color: var(--cmd-col); box-shadow: var(--bloom); }
         .sys-divider .badge { padding: 0 15px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 2px;}
 
-        #typewriter-line { display: flex; align-items: center; min-height: 1.5em; width: 100%;}
+        #typewriter-line { display: flex; align-items: center; min-height: 1.5em; width: 100%; padding-right: 10px;}
         #typewriter-text { white-space: pre-wrap; word-break: break-all; flex: 1;}
         .cursor { display: inline-block; width: 8px; height: 1em; background-color: var(--text-norm); margin-left: 2px; animation: cursor-blink 1s step-end infinite; box-shadow: var(--bloom);}
         @keyframes cursor-blink { 50% { opacity: 0; } }
@@ -583,13 +584,13 @@ HTML_TEMPLATE = """
                     <div class="mac-btn btn-min"></div>
                     <div class="mac-btn btn-max"></div>
                 </div>
-                <div class="mac-title">AUTH_GATEWAY</div>
+                <div class="mac-title">MAINFRAME_AUTH</div>
                 <div class="mac-spacer"></div>
             </div>
             <div class="login-content">
                 <h2>SYS_CONSOLE</h2>
                 <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button id="loginBtn" onclick="doLogin()">[ ENTER ]</button>
+                <button id="loginBtn" onclick="doLogin()">[ OVERRIDE ]</button>
             </div>
         </div>
     </div>
@@ -598,9 +599,9 @@ HTML_TEMPLATE = """
         <div class="mac-window">
             <div class="mac-header">
                 <div class="mac-btns">
-                    <div class="mac-btn btn-close" onclick="doLogout()" title="断开连接"></div>
-                    <div class="mac-btn btn-min" onclick="toggleTheme()" title="切换色控"></div>
-                    <div class="mac-btn btn-max breathing" title="内核运行中"></div>
+                    <div class="mac-btn btn-close" onclick="doLogout()" title="切断连接"></div>
+                    <div class="mac-btn btn-min" onclick="toggleTheme()" title="滤镜切换"></div>
+                    <div class="mac-btn btn-max breathing" title="系统内核运转中"></div>
                 </div>
                 <div class="mac-title">root@mainframe:~</div>
                 <div class="mac-spacer"></div>
@@ -671,7 +672,7 @@ HTML_TEMPLATE = """
                     enterSystem();
                     btn.innerText = origText;
                 } else {
-                    btn.innerText = '[ ACCESS DENIED ]';
+                    btn.innerText = '[ CLEARANCE DENIED ]';
                     btn.style.color = 'var(--log-err)';
                     btn.style.borderColor = 'var(--log-err)';
                     setTimeout(() => {
@@ -681,7 +682,7 @@ HTML_TEMPLATE = """
                     }, 2000);
                 }
             } catch(e) { 
-                btn.innerText = '[ NET ERR ]';
+                btn.innerText = '[ NET_PULSE_ERR ]';
                 btn.style.color = 'var(--log-warn)';
                 btn.style.borderColor = 'var(--log-warn)';
                 setTimeout(() => { 
@@ -723,7 +724,7 @@ HTML_TEMPLATE = """
             cmdInput.value = cmdText + ' ';
             cmdInput.focus();
             navigator.clipboard.writeText(cmdText).catch(err => {});
-            toast.innerText = `[OK] COPIED: ${cmdText}`;
+            toast.innerText = `[OK] LOADED: ${cmdText}`;
             toast.style.borderColor = 'var(--text-norm)';
             toast.style.color = 'var(--toast-text)';
             toast.className = 'show';
@@ -745,13 +746,13 @@ HTML_TEMPLATE = """
         }
 
         function processLogStream(logs) {
-            let splitIndex = logs.findIndex(l => l.includes("Web 终端与鉴权系统已就绪！"));
+            let splitIndex = logs.findIndex(l => l.includes("终端面甲激活完成，全系统就绪"));
             if(splitIndex === -1) splitIndex = -1; 
 
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
-                // 添加 System Ready 徽章分割线
-                bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYS_READY ]</div><div class="line"></div></div>';
+                // 添加 System Ready 徽章分割线 (Hardcore IT Style)
+                bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYSTEM_READY ]</div><div class="line"></div></div>';
                 document.getElementById('boot-sequence').innerHTML = bootHtml;
                 bootLogsRendered = true;
                 lastLogCount = splitIndex + 1;
@@ -842,7 +843,7 @@ HTML_TEMPLATE = """
                 
                 const fakeLog = document.createElement('div');
                 fakeLog.className = 'log-line INFO';
-                fakeLog.innerHTML = `<div class="log-content">[${new Date().toISOString().slice(0,19).replace('T', ' ')}] &gt; INPUT RECV: <span class="cmd-clickable">${cmd}</span></div>`;
+                fakeLog.innerHTML = `<div class="log-content">[${new Date().toISOString().slice(0,19).replace('T', ' ')}] &gt; COMMAND INPUT: <span class="cmd-clickable">${cmd}</span></div>`;
                 fakeLog.style.color = 'var(--cmd-col)';
                 liveLogsDiv.appendChild(fakeLog);
                 if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
@@ -892,14 +893,14 @@ def web_command():
     
     cmd_str = data.get("command", "").strip()
     if not cmd_str.startswith("/"):
-        logger.warning(f"<WEB_UI> 捕获语法异常: {cmd_str} (须以 / 起始) [WARN]")
+        logger.warning(f"<HUD_UI> 拦截非法语法流: {cmd_str} (须以 / 起始) [WARN]")
         return jsonify({"error": "Invalid command format"}), 400
         
     parts = cmd_str.split()
     command = parts[0].replace("/", "").lower()
     target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
     
-    logger.info(f"<WEB_UI> 下发底层指令: {cmd_str} [ OK ]")
+    logger.info(f"<HUD_UI> 权限提权写入(OVERRIDE): {cmd_str} [ OK ]")
     
     if command in ['start', 'stop', 'restart']:
         bot_action_runner(command.upper(), target_id)
@@ -908,44 +909,44 @@ def web_command():
     elif command == 'status':
         target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
         if target_id and not target_accounts:
-            logger.error(f"<WEB_UI> 未匹配到标识为 {target_id} 的映射实体 [FAIL]")
+            logger.error(f"<HUD_UI> 数据库未能匹配到编号 {target_id} 的容器节点 [FAIL]")
             return jsonify({"status": "Not found"})
         
         def _check_web():
-            sys_status = "■ 繁忙 (执行列队中)" if system_busy_event.is_set() else "■ 空闲 (锁已释放)"
-            logger.info(f"<SYS_INF> 内存流控锁状态: {sys_status}")
+            sys_status = "■ 红色警戒 (强制指令阻塞中)" if system_busy_event.is_set() else "■ 绿色安定 (全局锁已释放)"
+            logger.info(f"<SYS_OP> 集群算力容器状态追踪: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                logger.info(f"<SYS_INF> 节点 {acc['id']} ({acc['email']}) -> 状态: {status}")
+                logger.info(f"<SYS_OP> 节点 {acc['id']} ({acc['email']}) -> 容器物理态: {status}")
                 
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})
         
     elif command == 'sap':
-        logger.info("----------- 核心指令集 -----------")
-        logger.info("❖ /status   ( 状态追踪查询 )")
-        logger.info("❖ /stop     ( 冻结算力容器 )")
-        logger.info("❖ /start    ( 唤醒算力容器 )")
-        logger.info("❖ /restart  ( 硬重置数据流 )")
+        logger.info("--------- 主机集群控制终端 ---------")
+        logger.info("❖ /status   ( 节点运行状态追踪 )")
+        logger.info("❖ /stop     ( 强制冻结算力容器 )")
+        logger.info("❖ /start    ( 唤醒挂起算力容器 )")
+        logger.info("❖ /restart  ( 硬重置数据流链路 )")
         return jsonify({"status": "Help displayed"})
     
     else:
-        logger.warning(f"<WEB_UI> 丢弃无效的指令序列: {cmd_str} [WARN]")
+        logger.warning(f"<HUD_UI> 滤除未知战术指令: {cmd_str} [WARN]")
         return jsonify({"error": "Unknown command"}), 400
 
 # ==========================================
 # 9. 启动引导区
 # ==========================================
 def start_bot_polling():
-    logger.info("<SYS_INIT> TG 通讯子系统成功连线。 [ OK ]")
+    logger.info("<SYS_INIT> 外部系统通讯网络连线补完。 [ OK ]")
     bot.infinity_polling()
 
 if __name__ == '__main__':
     logger.info("======================================================================")
-    logger.info(f"<SYS_INIT> SAP BAS 内核启动! 载入 {len(ACCOUNTS)} 个有效映射参数。 [ OK ]")
+    logger.info(f"<SYS_INIT> 核心调度模块启动！成功挂载 {len(ACCOUNTS)} 个节点参数。 [ OK ]")
     
     if not ACCOUNTS:
-        logger.error("[!!FATAL!!] 核心环境变量缺失，进程异常终止！ [FAIL]")
+        logger.error("[!!FATAL!!] 核心节点参数缺失，系统抛出异常并自我锁定！ [FAIL]")
         sys.exit(1)
         
     scheduler = BackgroundScheduler()
@@ -955,9 +956,9 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"<SCHEDULR> 节点 {acc['id']} 任务队列注入 [ KEEPALIVE:每小时{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}时{acc['jobb_min']}分 | PROBE:ON ] [ OK ]")
+            logger.info(f"<SCHEDULR> 节点 {acc['id']} 守护进程注入 [ KEEP_ALIVE:每小时{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}时{acc['jobb_min']}分 | PROBE:ON ] [ OK ]")
         else:
-            logger.info(f"<SCHEDULR> 节点 {acc['id']} 任务队列注入 [ KEEPALIVE:每小时{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}时{acc['jobb_min']}分 | PROBE:OFF ] [ OK ]")
+            logger.info(f"<SCHEDULR> 节点 {acc['id']} 守护进程注入 [ KEEP_ALIVE:每小时{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}时{acc['jobb_min']}分 | PROBE:OFF ] [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 
@@ -966,7 +967,7 @@ if __name__ == '__main__':
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info("<SYS_INIT> Web 终端与鉴权系统已就绪！ [ OK ]")
+    logger.info("<HUD_UI> 终端面甲激活完成，全系统就绪。 [ OK ]")
     
     for acc in ACCOUNTS:
         if acc.get('tunnel_url'):

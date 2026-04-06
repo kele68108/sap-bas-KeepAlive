@@ -567,8 +567,8 @@ HTML_TEMPLATE = """
             </div>
             <div class="login-content">
                 <h2>SYS_CONSOLE</h2>
-                <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button id="loginBtn" onclick="doLogin()">[ ENTER ]</button>
+                <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off">
+                <button id="loginBtn">[ ENTER ]</button>
             </div>
         </div>
     </div>
@@ -649,7 +649,6 @@ HTML_TEMPLATE = """
                 if (res.status === 200) {
                     localStorage.setItem('bas_token', pass);
                     enterSystem();
-                    btn.innerText = origText;
                 } else {
                     btn.innerText = '[ ACCESS DENIED ]';
                     btn.style.color = 'var(--log-err)';
@@ -661,6 +660,7 @@ HTML_TEMPLATE = """
                     }, 2000);
                 }
             } catch(e) { 
+                console.error(e);
                 btn.innerText = '[ NET ERR ]';
                 btn.style.color = 'var(--log-warn)';
                 btn.style.borderColor = 'var(--log-warn)';
@@ -824,6 +824,15 @@ HTML_TEMPLATE = """
                     });
                     if (res.status === 401) doLogout();
                 } catch (err) {}
+            }
+        });
+
+        // ====================== 修复登录界面事件 ======================
+        // 原有内联 onclick / onkeypress 被移除，现在统一用 addEventListener 绑定
+        document.getElementById('loginBtn').addEventListener('click', doLogin);
+        document.getElementById('loginPass').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                doLogin();
             }
         });
 

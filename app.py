@@ -572,7 +572,7 @@ HTML_TEMPLATE = """
             <div id="terminal"></div>
             
             <div id="input-area">
-                <span id="cmd-prefix">请输入 /sap 查询可用命令：</span>
+                <span id="cmd-prefix">请输入 /sap 查询可用命令:</span>
                 <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 控制单个账号，不加则控制所有账号。">
             </div>
         </div>
@@ -803,7 +803,6 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info("========================================")
     logger.info(f"🚀 SAP BAS 全自动保活 开始运行! 检测到 {len(ACCOUNTS)} 个有效账号。")
     
     if not ACCOUNTS:

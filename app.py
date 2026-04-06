@@ -454,7 +454,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAP BAS 云终端</title>
+    <title>SAP BAS KEEPALIVE 终端</title>
     <style>
         /* 纯正 macOS 终端色彩变量 */
         :root[data-theme="dark"] { 
@@ -546,13 +546,13 @@ HTML_TEMPLATE = """
                     <div class="mac-btn btn-min"></div>
                     <div class="mac-btn btn-max"></div>
                 </div>
-                <div class="mac-title">Terminal — Login</div>
+                <div class="mac-title">Login</div>
                 <div class="mac-spacer"></div>
             </div>
             <div class="login-content">
-                <h2>SAP BAS Auth</h2>
-                <input type="password" id="loginPass" placeholder="Enter WEB_TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button onclick="doLogin()">Authorize Session</button>
+                <h2>SAP BAS KEEPALIVE</h2>
+                <input type="password" id="loginPass" placeholder="请输入密码" autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
+                <button onclick="doLogin()">进入终端</button>
             </div>
         </div>
     </div>
@@ -565,15 +565,15 @@ HTML_TEMPLATE = """
                     <div class="mac-btn btn-min" onclick="toggleTheme()" title="切换明暗主题"></div>
                     <div class="mac-btn btn-max breathing" title="系统运行中"></div>
                 </div>
-                <div class="mac-title">root@sap-bas: ~</div>
+                <div class="mac-title">SAP BAS KEEPALIVE</div>
                 <div class="mac-spacer"></div>
             </div>
             
             <div id="terminal"></div>
             
             <div id="input-area">
-                <span id="cmd-prefix">root@bas:~#</span>
-                <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="输入指令 或 点击上方命令蓝字快捷复制 (例如: /sap, /start 1)">
+                <span id="cmd-prefix">请输入 /sap 查询可用命令：</span>
+                <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 控制单个账号，不加则控制所有账号。">
             </div>
         </div>
     </div>
@@ -654,7 +654,7 @@ HTML_TEMPLATE = """
             cmdInput.value = cmdText + ' ';
             cmdInput.focus();
             navigator.clipboard.writeText(cmdText).catch(err => {});
-            toast.innerText = `已快捷填入指令: ${cmdText} 按回车执行`;
+            toast.innerText = `已自动填入指令: ${cmdText} 按回车执行`;
             toast.className = 'show';
             setTimeout(() => { toast.className = ''; }, 2000);
         }

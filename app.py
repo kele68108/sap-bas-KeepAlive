@@ -84,7 +84,7 @@ def send_tg_msg(text):
         try:
             bot.send_message(TG_CHAT_ID, text, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"<SYS_ERR_> TG 通知发送异常: {str(e)}        [FAIL]")
+            logger.error(f"<SYS_ERR_> TG 通知发送异常: {str(e)} [FAIL]")
 
 def send_tg_photo(photo_path, caption=""):
     if bot and TG_CHAT_ID and os.path.exists(photo_path):
@@ -92,7 +92,7 @@ def send_tg_photo(photo_path, caption=""):
             with open(photo_path, 'rb') as photo:
                 bot.send_photo(TG_CHAT_ID, photo, caption=caption, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"<SYS_ERR_> TG 图片发送异常: {str(e)}        [FAIL]")
+            logger.error(f"<SYS_ERR_> TG 图片发送异常: {str(e)} [FAIL]")
 
 # ==========================================
 # 4. 业务逻辑层
@@ -147,7 +147,7 @@ class SAPController:
                 api_request = context.request
 
                 try:
-                    logger.info(f" > AUTH_REQ 账号 {acc_id} 请求登录入口...           [WAIT]")
+                    logger.info(f" > AUTH_REQ 账号 {acc_id} 请求登录入口... [WAIT]")
                     page.goto(f"{region_url}/index.html")
                     page.locator("input[name='j_username'], input[type='email']").fill(email)
                     if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
@@ -187,7 +187,7 @@ class SAPController:
                     if action_type == "STOP" and status == "STOPPED":
                         msg = f"► <b>操作合并 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 已经是 <b>STOPPED</b> 状态，任务跳过。"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 STOPPED 状态   [ OK ]")
+                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 STOPPED 状态 [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -196,7 +196,7 @@ class SAPController:
                     if action_type == "START" and status == "RUNNING":
                         msg = f"► <b>操作合并 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 已经是 <b>RUNNING</b> 状态，任务跳过。\n💡 <i>若ARGO离线请使用 /restart。</i>"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 RUNNING 状态   [ OK ]")
+                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 RUNNING 状态 [ OK ]")
                         account['probe_paused'] = False
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -223,15 +223,15 @@ class SAPController:
                         return False
 
                     if action_type in ["RESTART", "STOP"] and status == "RUNNING":
-                        logger.info(f" > WS_HALT_ 账号 {acc_id} 发送休眠信令...           [WAIT]")
+                        logger.info(f" > WS_HALT_ 账号 {acc_id} 发送休眠信令... [WAIT]")
                         if set_status(True, "STOPPED"):
-                            logger.info(f" < WS_HALT_ 账号 {acc_id} 容器物理挂起成功       [ OK ]")
+                            logger.info(f" < WS_HALT_ 账号 {acc_id} 容器物理挂起成功 [ OK ]")
                             status = "STOPPED"
                     
                     if action_type == "STOP":
                         msg = f"■ <b>SAP BAS 停止指令 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已成功下线资源。"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END 账号 {acc_id} STOP指令执行完毕       [ OK ]")
+                        logger.info(f" < TASK_END 账号 {acc_id} STOP指令执行完毕 [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -239,12 +239,12 @@ class SAPController:
                         
                     if action_type in ["START", "RESTART", "KEEPALIVE"] and status in ["STOPPED", "STARTING", "RUNNING"]:
                         if status == "STOPPED":
-                            logger.info(f" > WS_BOOT_ 账号 {acc_id} 申请分配算力资源...      [WAIT]")
+                            logger.info(f" > WS_BOOT_ 账号 {acc_id} 申请分配算力资源... [WAIT]")
                             if not set_status(False, "RUNNING"):
-                                logger.error(f"[!!FATAL!!] 账号 {acc_id} 容器启动严重超时       [FAIL]")
+                                logger.error(f"[!!FATAL!!] 账号 {acc_id} 容器启动严重超时 [FAIL]")
                                 return False
                                 
-                        logger.info(f" > UI_PENET 账号 {acc_id} 注入无头浏览器探针...    [WAIT]")
+                        logger.info(f" > UI_PENET 账号 {acc_id} 注入无头浏览器探针... [WAIT]")
                         page.goto(f"{region_url}/index.html")
                         time.sleep(8)
                         
@@ -252,10 +252,10 @@ class SAPController:
                         ws_link = ws_frame.locator(f"a[href*='{ws_uuid}']").first
                         ws_link.wait_for(state="visible", timeout=20000)
                         ws_link.click(force=True)
-                        logger.info(f" > IDE_LOAD 账号 {acc_id} 等待 IDE 核心初始化...   [WAIT]")
+                        logger.info(f" > IDE_LOAD 账号 {acc_id} 等待 IDE 核心初始化... [WAIT]")
                         time.sleep(30)
                         
-                        logger.info(f" > UI_CLEAN 账号 {acc_id} 执行模态框压制策略...    [WAIT]")
+                        logger.info(f" > UI_CLEAN 账号 {acc_id} 执行模态框压制策略... [WAIT]")
                         for _ in range(3):
                             page.keyboard.press("Escape")
                             time.sleep(0.5)
@@ -272,18 +272,18 @@ class SAPController:
                         return True
                         
                 except Exception as inner_e:
-                    logger.error(f"[!!FATAL!!] 账号 {acc_id} 运行时抛出致命异常       [FAIL]")
+                    logger.error(f"[!!FATAL!!] 账号 {acc_id} 运行时抛出致命异常 [FAIL]")
                     try:
                         error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
                         send_tg_photo(error_shot, f"▲ <b>核心执行异常 (账号 {acc_id})</b>\n动作: {action_type}\n反馈: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
-                        logger.error(f"<SYS_ERR_> 崩溃堆栈快照导出失败: {pic_e}     [FAIL]")
+                        logger.error(f"<SYS_ERR_> 崩溃堆栈快照导出失败: {pic_e} [FAIL]")
                     return False
                 finally:
                     browser.close()
         except Exception as e:
-            logger.error(f"[!!FATAL!!] 浏览器隔离沙盒拉起失败: {str(e)}      [FAIL]")
+            logger.error(f"[!!FATAL!!] 浏览器隔离沙盒拉起失败: {str(e)} [FAIL]")
             return False
 
 # ==========================================
@@ -298,7 +298,7 @@ def enqueue_task(action, target_accounts, source):
     if source == "MANUAL":
         acc_str = f"账号 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全局 {len(target_accounts)} 节点"
         msg = f"► <b>系统调度列队</b>\n目标: <b>{acc_str}</b>\n指令: <b>{action}</b>..."
-        logger.info(f"<SCHEDULR> 手动指令 [{action}] 压入系统队列          [ OK ]")
+        logger.info(f"<SCHEDULR> 手动指令 [{action}] 压入系统队列 [ OK ]")
         send_tg_msg(msg)
 
 def global_task_worker():
@@ -316,12 +316,12 @@ def global_task_worker():
                 if len(accounts) > 1:
                     time.sleep(3)
         except Exception as e:
-            logger.error(f"<SYS_ERR_> 流水线工人线程异常: {e}           [FAIL]")
+            logger.error(f"<SYS_ERR_> 流水线工人线程异常: {e} [FAIL]")
         finally:
             system_busy_event.clear()
             if source == "MANUAL":
                 finish_msg = "■ <b>终端报告</b>\n系统排队任务已清空，硬件锁已释放。"
-                logger.info("<SCHEDULR> 手动调度队列执行完毕，释放系统锁      [ OK ]")
+                logger.info("<SCHEDULR> 手动调度队列执行完毕，释放系统锁 [ OK ]")
                 send_tg_msg(finish_msg)
             task_queue.task_done()
 
@@ -334,7 +334,7 @@ def bot_action_runner(action, target_id=None):
     target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
     if not target_accounts:
         msg = f"▲ 未匹配到目标标识 [<b>{target_id}</b>] 的参数块！"
-        logger.error(f"<SCHEDULR> 目标标识 {target_id} 索引越界或未装载      [FAIL]")
+        logger.error(f"<SCHEDULR> 目标标识 {target_id} 索引越界或未装载 [FAIL]")
         send_tg_msg(msg)
         return
     enqueue_task(action, target_accounts, "MANUAL")
@@ -364,7 +364,7 @@ def tunnel_health_check(account):
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f" > NET_PING 账号 {acc_id} 边缘节点阻断 ({account['fail_count']}/5)...  [WARN]")
+        logger.warning(f" > NET_PING 账号 {acc_id} 边缘节点阻断 ({account['fail_count']}/5)... [WARN]")
         
         if account['fail_count'] >= 5:
             if account['auto_restart_count'] >= 3:
@@ -385,9 +385,9 @@ def clean_probe_logs():
         filtered_logs = [log for log in list(log_queue) if "NET_PING" not in log]
         log_queue.clear()
         log_queue.extend(filtered_logs)
-        logger.info("<MEM_SWEEP> 常规网络嗅探流数据已从系统内存剥离     [ OK ]")
+        logger.info("<MEM_SWEEP> 常规网络嗅探流数据已从系统内存剥离 [ OK ]")
     except Exception as e:
-        logger.error(f"<SYS_ERR_> 内存清理程序陷入死锁: {str(e)}        [FAIL]")
+        logger.error(f"<SYS_ERR_> 内存清理程序陷入死锁: {str(e)} [FAIL]")
 
 # ==========================================
 # 6. Telegram Bot ChatOps
@@ -453,7 +453,7 @@ HTML_TEMPLATE = """
     <title>SYS_CONSOLE</title>
     <style>
         /* 复古赛博朋克 色彩与字体 */
-        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap');
         
         :root[data-theme="dark"] { 
             --bg-body: #0d1117; --bg-window: #010409; --bg-header: #161b22;
@@ -476,12 +476,13 @@ HTML_TEMPLATE = """
             --bloom: none;
         }
         
-        body { background: var(--bg-body); color: var(--text-norm); font-family: 'VT323', 'Consolas', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; text-shadow: var(--bloom); font-size: 17px;}
+        body { background: var(--bg-body); color: var(--text-norm); font-family: 'DotGothic16', 'VT323', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; text-shadow: var(--bloom); font-size: 16px;}
         
+        /* CRT Scanlines */
         body::after {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
-            z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
+            z-index: 2; background-size: 100% 3px, 3px 100%; pointer-events: none;
         }
         
         #login-view, #app-view { 
@@ -506,7 +507,7 @@ HTML_TEMPLATE = """
         .breathing { animation: blink-btn 2s infinite; }
         @keyframes blink-btn { 0%, 100% { box-shadow: 0 0 8px #27c93f; opacity: 1; } 50% { box-shadow: none; opacity: 0.5; } }
         
-        .mac-title { font-size: 15px; font-weight: bold; color: var(--text-muted); letter-spacing: 1px; text-align: center; flex: 1;}
+        .mac-title { font-size: 14px; font-weight: bold; color: var(--text-muted); letter-spacing: 1px; text-align: center; flex: 1; font-family: -apple-system, sans-serif;}
         .mac-spacer { width: 60px; } 
 
         #login-view .mac-window { width: 380px; height: auto; }
@@ -519,30 +520,50 @@ HTML_TEMPLATE = """
 
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
-        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
         
-        #boot-sequence { flex-shrink: 0; margin-bottom: 10px; }
-        .separator { color: var(--text-muted); margin: 5px 0 15px 0; user-select: none; }
+        #boot-sequence { flex-shrink: 0; }
         #live-logs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
         
-        .log-line { margin: 2px 0; }
-        .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } .ERROR { color: var(--log-err); font-weight: bold;}
+        /* Flexbox Log Line */
+        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 2px 0; width: 100%; }
+        .log-content { flex: 1; word-break: break-all; }
+        .log-badge { flex-shrink: 0; margin-left: 15px; font-family: 'VT323', monospace; font-size: 17px;}
+
+        .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } 
         
-        .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
-        .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
-        .inv-wait { background: var(--log-warn); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
-        .inv-warn { background: var(--log-warn); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
+        /* Glitch Animation for ERROR */
+        @keyframes glitch-anim {
+            0% { transform: translate(0); text-shadow: none; }
+            20% { transform: translate(-2px, 1px); text-shadow: 2px 0 rgba(255,0,0,0.8), -2px 0 rgba(0,0,255,0.8); }
+            40% { transform: translate(-1px, -1px); text-shadow: none; }
+            60% { transform: translate(2px, 1px); text-shadow: -2px 0 rgba(255,0,0,0.8), 2px 0 rgba(0,0,255,0.8); }
+            80% { transform: translate(1px, -1px); text-shadow: none; }
+            100% { transform: translate(0); text-shadow: none; }
+        }
+        .ERROR .log-content { animation: glitch-anim 0.3s ease-in-out; color: var(--log-err); font-weight: bold; }
+        .ERROR .log-badge { color: var(--log-err); }
+        
+        .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
+        .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
+        .inv-wait { background: var(--log-warn); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
+        .inv-warn { background: var(--log-warn); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
         
         .cmd-clickable { color: var(--cmd-col); padding: 0 4px; cursor: pointer; border: 1px solid var(--cmd-border); margin: 0 2px; transition: 0.1s;}
         .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
-        #typewriter-line { display: flex; align-items: center; min-height: 1.4em;}
-        #typewriter-text { white-space: pre; }
-        .cursor { display: inline-block; width: 10px; height: 1em; background-color: var(--text-norm); margin-left: 2px; animation: cursor-blink 1s step-end infinite; box-shadow: var(--bloom);}
+        /* System Ready Divider */
+        .sys-divider { display: flex; align-items: center; width: 100%; margin: 15px 0 10px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
+        .sys-divider .line { flex: 1; height: 1px; background-color: var(--cmd-col); box-shadow: var(--bloom); }
+        .sys-divider .badge { padding: 0 15px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 2px;}
+
+        #typewriter-line { display: flex; align-items: center; min-height: 1.5em; width: 100%;}
+        #typewriter-text { white-space: pre-wrap; word-break: break-all; flex: 1;}
+        .cursor { display: inline-block; width: 8px; height: 1em; background-color: var(--text-norm); margin-left: 2px; animation: cursor-blink 1s step-end infinite; box-shadow: var(--bloom);}
         @keyframes cursor-blink { 50% { opacity: 0; } }
         
         #input-area { background: var(--input-bg); padding: 15px 20px; display: flex; align-items: center; border-top: 1px solid var(--border-col); }
-        #cmd-prefix { color: var(--cmd-col); margin-right: 12px; font-weight: bold;}
+        #cmd-prefix { color: var(--cmd-col); margin-right: 12px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px;}
         #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-norm); font-family: inherit; font-size: 17px; outline: none; text-shadow: var(--bloom);}
         #cmdInput::placeholder { color: var(--text-muted); text-shadow: none;}
         
@@ -587,7 +608,6 @@ HTML_TEMPLATE = """
             
             <div id="terminal-wrapper">
                 <div id="boot-sequence"></div>
-                <div class="separator">======================================================================</div>
                 <div id="live-logs"></div>
                 <div id="typewriter-line"><span id="typewriter-text"></span><span class="cursor"></span></div>
             </div>
@@ -730,6 +750,8 @@ HTML_TEMPLATE = """
 
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
+                // 添加 System Ready 徽章分割线
+                bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYS_READY ]</div><div class="line"></div></div>';
                 document.getElementById('boot-sequence').innerHTML = bootHtml;
                 bootLogsRendered = true;
                 lastLogCount = splitIndex + 1;
@@ -756,14 +778,24 @@ HTML_TEMPLATE = """
             if (log.includes('[WARN]')) cls = 'WARNING';
             if (log.includes('[FAIL]') || log.includes('[!!FATAL!!]')) cls = 'ERROR';
             
-            let formatted = log.replace(/\[ OK \]/g, '<span class="inv-ok">[ OK ]</span>')
-                               .replace(/\[FAIL\]/g, '<span class="inv-fail">[FAIL]</span>')
-                               .replace(/\[WAIT\]/g, '<span class="inv-wait">[WAIT]</span>')
-                               .replace(/\[WARN\]/g, '<span class="inv-warn">[WARN]</span>');
-                               
-            formatted = formatted.replace(/(\\/(?:status|stop|start|restart|sap)\\b)/g, 
+            let badgeHtml = '';
+            let contentHtml = log;
+            
+            // 提取末尾的状态徽章用于 Flex 弹性对齐
+            let badgeRegex = /\\[\\s*(OK|FAIL|WAIT|WARN)\\s*\\]/;
+            let match = log.match(badgeRegex);
+            if (match) {
+                 let type = match[1];
+                 let badgeCls = 'inv-' + type.toLowerCase();
+                 let displayType = type === 'OK' ? ' OK ' : type;
+                 badgeHtml = `<div class="log-badge"><span class="${badgeCls}">[${displayType}]</span></div>`;
+                 contentHtml = log.replace(badgeRegex, '').trim();
+            }
+            
+            contentHtml = contentHtml.replace(/(\\/(?:status|stop|start|restart|sap)\\b)/g, 
                     '<span class="cmd-clickable" onclick="copyToInput(\\'$1\\')">$1</span>');
-            return `<div class="log-line ${cls}">${formatted}</div>`;
+                    
+            return `<div class="log-line ${cls}"><div class="log-content">${contentHtml}</div>${badgeHtml}</div>`;
         }
 
         function runTypewriter() {
@@ -810,7 +842,7 @@ HTML_TEMPLATE = """
                 
                 const fakeLog = document.createElement('div');
                 fakeLog.className = 'log-line INFO';
-                fakeLog.innerHTML = `[${new Date().toISOString().slice(0,19).replace('T', ' ')}] &gt; INPUT RECV: <span class="cmd-clickable">${cmd}</span>`;
+                fakeLog.innerHTML = `<div class="log-content">[${new Date().toISOString().slice(0,19).replace('T', ' ')}] &gt; INPUT RECV: <span class="cmd-clickable">${cmd}</span></div>`;
                 fakeLog.style.color = 'var(--cmd-col)';
                 liveLogsDiv.appendChild(fakeLog);
                 if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
@@ -860,14 +892,14 @@ def web_command():
     
     cmd_str = data.get("command", "").strip()
     if not cmd_str.startswith("/"):
-        logger.warning(f"<WEB_UI> 捕获语法异常: {cmd_str} (须以 / 起始)  [WARN]")
+        logger.warning(f"<WEB_UI> 捕获语法异常: {cmd_str} (须以 / 起始) [WARN]")
         return jsonify({"error": "Invalid command format"}), 400
         
     parts = cmd_str.split()
     command = parts[0].replace("/", "").lower()
     target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
     
-    logger.info(f"<WEB_UI> 下发底层指令: {cmd_str}                 [ OK ]")
+    logger.info(f"<WEB_UI> 下发底层指令: {cmd_str} [ OK ]")
     
     if command in ['start', 'stop', 'restart']:
         bot_action_runner(command.upper(), target_id)
@@ -876,7 +908,7 @@ def web_command():
     elif command == 'status':
         target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
         if target_id and not target_accounts:
-            logger.error(f"<WEB_UI> 未匹配到标识为 {target_id} 的映射实体      [FAIL]")
+            logger.error(f"<WEB_UI> 未匹配到标识为 {target_id} 的映射实体 [FAIL]")
             return jsonify({"status": "Not found"})
         
         def _check_web():
@@ -898,14 +930,14 @@ def web_command():
         return jsonify({"status": "Help displayed"})
     
     else:
-        logger.warning(f"<WEB_UI> 丢弃无效的指令序列: {cmd_str}        [WARN]")
+        logger.warning(f"<WEB_UI> 丢弃无效的指令序列: {cmd_str} [WARN]")
         return jsonify({"error": "Unknown command"}), 400
 
 # ==========================================
 # 9. 启动引导区
 # ==========================================
 def start_bot_polling():
-    logger.info("<SYS_INIT> TG 通讯子系统成功连线。             [ OK ]")
+    logger.info("<SYS_INIT> TG 通讯子系统成功连线。 [ OK ]")
     bot.infinity_polling()
 
 if __name__ == '__main__':
@@ -913,7 +945,7 @@ if __name__ == '__main__':
     logger.info(f"<SYS_INIT> SAP BAS 内核启动! 载入 {len(ACCOUNTS)} 个有效映射参数。 [ OK ]")
     
     if not ACCOUNTS:
-        logger.error("[!!FATAL!!] 核心环境变量缺失，进程异常终止！         [FAIL]")
+        logger.error("[!!FATAL!!] 核心环境变量缺失，进程异常终止！ [FAIL]")
         sys.exit(1)
         
     scheduler = BackgroundScheduler()
@@ -923,9 +955,9 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"<SCHEDULR> 节点 {acc['id']} 定时器注入 (含NET嗅探)          [ OK ]")
+            logger.info(f"<SCHEDULR> 节点 {acc['id']} 任务队列注入 [ KEEPALIVE:每小时{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}时{acc['jobb_min']}分 | PROBE:ON ] [ OK ]")
         else:
-            logger.info(f"<SCHEDULR> 节点 {acc['id']} 定时器注入 (忽略NET嗅探)        [ OK ]")
+            logger.info(f"<SCHEDULR> 节点 {acc['id']} 任务队列注入 [ KEEPALIVE:每小时{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}时{acc['jobb_min']}分 | PROBE:OFF ] [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 
@@ -934,7 +966,7 @@ if __name__ == '__main__':
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info("<SYS_INIT> Web 终端与鉴权系统已就绪！             [ OK ]")
+    logger.info("<SYS_INIT> Web 终端与鉴权系统已就绪！ [ OK ]")
     
     for acc in ACCOUNTS:
         if acc.get('tunnel_url'):

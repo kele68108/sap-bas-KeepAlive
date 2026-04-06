@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import threading
+import queue
 import urllib.parse
 import logging
 from collections import deque
@@ -20,15 +21,12 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 WEB_TOKEN = os.environ.get("WEB_TOKEN", "default_token")
 PORT = int(os.environ.get("PORT", 8080))
 
-# URL 自动格式化函数 (自动识别并补全 https://)
+# URL 自动格式化函数
 def format_url(url_str):
-    if not url_str:
-        return None
+    if not url_str: return None
     url_str = url_str.strip()
-    if url_str.startswith("https://"):
-        url_str = url_str[8:]
-    elif url_str.startswith("http://"):
-        url_str = url_str[7:]
+    if url_str.startswith("https://"): url_str = url_str[8:]
+    elif url_str.startswith("http://"): url_str = url_str[7:]
     return f"https://{url_str}"
 
 # 动态加载所有配置了 SAP_EMAIL_X 的账号
@@ -45,10 +43,14 @@ for i in range(1, 11):
             "jobb_hrs": os.environ.get(f"JOBB_HOURS_{i}", "*/12"),
             "jobb_min": os.environ.get(f"JOBB_MINUTE_{i}", "30"),
             "tunnel_url": format_url(os.environ.get(f"TUNNEL_URL_{i}")),
-            "fail_count": 0
+            "fail_count": 0,
+            "auto_restart_count": 0,    # [新增] 连续自动重启计数器 (熔断器)
+            "probe_paused": False       # [新增] 探针挂起标识
         })
 
-action_lock = threading.Lock()
+# [架构升级] 引入全局任务队列与系统繁忙状态灯，取代原来的 action_lock
+task_queue = queue.Queue()
+system_busy_event = threading.Event()
 
 # ==========================================
 # 2. 极客级内存日志系统
@@ -189,12 +191,22 @@ class SAPController:
                         msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>STOPPED</b> 状态，无需重复停止。"
                         send_tg_msg(msg)
                         logger.info(f"[-] 账号 {acc_id} 状态已是 STOPPED，无需重复停止。")
+                        
+                        # [修复 1] 同步挂起探针
+                        account['probe_paused'] = True
+                        account['fail_count'] = 0
+                        account['auto_restart_count'] = 0
                         return True
                         
                     if action_type == "START" and status == "RUNNING":
                         msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>RUNNING</b> 状态，无需重复启动。\n💡 <i>提示：若代理隧道不通，请使用 /restart 进行深度重置。</i>"
                         send_tg_msg(msg)
                         logger.info(f"[-] 账号 {acc_id} 状态已是 RUNNING，无需重复启动。")
+                        
+                        # 恢复探针
+                        account['probe_paused'] = False
+                        account['fail_count'] = 0
+                        account['auto_restart_count'] = 0
                         return True
 
                     csrf_headers = req_headers.copy()
@@ -224,9 +236,14 @@ class SAPController:
                             status = "STOPPED"
                     
                     if action_type == "STOP":
-                        msg = f"🔴 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已成功停止服务！"
+                        msg = f"🔴 <b>SAP BAS {action_type} 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已停止服务！"
                         send_tg_msg(msg)
-                        logger.info(f"[+] 账号 {acc_id} STOP 任务结束，已发送通知。")
+                        logger.info(f"[+] 账号 {acc_id} STOP 任务结束，已挂起探针，发送TG通知。")
+                        
+                        # [修复 1] 成功 STOP 后同步挂起探针
+                        account['probe_paused'] = True
+                        account['fail_count'] = 0
+                        account['auto_restart_count'] = 0
                         return True
                         
                     if action_type in ["START", "RESTART", "KEEPALIVE"] and status in ["STOPPED", "STARTING", "RUNNING"]:
@@ -255,8 +272,13 @@ class SAPController:
                         screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
-                            send_tg_photo(screenshot_path, f"🎯 <b>[{action_type}] 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已唤醒！")
+                            send_tg_photo(screenshot_path, f"🎯 <b>SAP BAS {action_type} 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已唤醒服务！")
                         logger.info(f"[+] 🎯 账号 {acc_id} [{action_type}] 任务成功。")
+                        
+                        # [修复 1] START/RESTART 成功后，唤醒探针并清零所有熔断计数器
+                        account['probe_paused'] = False
+                        account['fail_count'] = 0
+                        account['auto_restart_count'] = 0
                         return True
                         
                 except Exception as inner_e:
@@ -274,53 +296,82 @@ class SAPController:
             logger.error(f"[!] 浏览器环境拉起失败: {str(e)}")
             return False
 
-# ==========================================
-# 5. 任务并发调度控制逻辑 与 新增隧道探针
-# ==========================================
-def async_task_runner(action, account):
-    if not action_lock.acquire(blocking=False):
-        logger.warning(f"被跳过：账号 {account['id']} 尝试 {action}，但系统繁忙。")
-        return
-    try:
-        SAPController.execute_lifecycle_action(action, account)
-    finally:
-        action_lock.release()
 
-def bot_action_runner(action, target_id=None):
-    if not action_lock.acquire(blocking=False):
-        logger.warning("系统繁忙，手动指令排队被拒绝。")
-        send_tg_msg("⚠️ 系统当前有任务正在执行，请等待释放锁后再试。")
-        return
-    try:
-        target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
-        if not target_accounts:
-            msg = f"❌ 未找到 ID 为 <b>{target_id}</b> 的账号配置！"
-            logger.error(msg.replace("<b>", "").replace("</b>", ""))
-            send_tg_msg(msg)
-            return
-            
-        if target_id:
-            msg = f"✅ 收到指令：即将为 <b>账号 {target_id}</b> 执行 <b>{action}</b>..."
-        else:
-            msg = f"✅ 收到指令：即将为 <b>{len(target_accounts)} 个账号</b> 依次执行 <b>{action}</b>..."
-            
+# ==========================================
+# 5. 全局排队调度中心与隧道探针 (架构大升级)
+# ==========================================
+
+def enqueue_task(action, target_accounts, source):
+    """通用排队入列器"""
+    task_queue.put({
+        "action": action,
+        "accounts": target_accounts,
+        "source": source
+    })
+    
+    # 交互回显：仅当用户通过 Web 或 Telegram 手动下发时播报排队情况
+    if source == "MANUAL":
+        acc_str = f"账号 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全部 {len(target_accounts)} 个账号"
+        msg = f"✅ 已加入排队系统：即将为 <b>{acc_str}</b> 依次执行 <b>{action}</b>..."
         logger.info(msg.replace("<b>", "").replace("</b>", ""))
         send_tg_msg(msg)
+
+def global_task_worker():
+    """[架构升级 3] 全局流水线工人线程：永远单线程串行处理队列，告别锁抢占冲突"""
+    while True:
+        task = task_queue.get()
+        # 挂起忙碌指示灯，探针将暂停干扰
+        system_busy_event.set()
+        
+        action = task['action']
+        accounts = task['accounts']
+        source = task['source']
+        
+        try:
+            for acc in accounts:
+                SAPController.execute_lifecycle_action(action, acc)
+                if len(accounts) > 1:
+                    time.sleep(3) # 多账号切换缓冲
+        except Exception as e:
+            logger.error(f"Worker 执行流水线异常: {e}")
+        finally:
+            # 熄灭忙碌指示灯
+            system_busy_event.clear()
             
-        for acc in target_accounts:
-            SAPController.execute_lifecycle_action(action, acc)
-            if len(target_accounts) > 1:
-                time.sleep(3)
+            # [修复 3] 手动任务执行完毕后的全局播报反馈
+            if source == "MANUAL":
+                finish_msg = "🎉 <b>后台任务已全部执行完毕，系统资源已释放，可以下发新的指令。</b>"
+                logger.info(finish_msg.replace("<b>", "").replace("</b>", ""))
+                send_tg_msg(finish_msg)
                 
-        logger.info(f"🎉 {action} 指令下发执行完毕！")
-        send_tg_msg(f"🎉 <b>{action} 指令下发执行完毕！</b>")
-    finally:
-        action_lock.release()
+            task_queue.task_done()
+
+# 启动后台单例流水线工人
+threading.Thread(target=global_task_worker, daemon=True).start()
+
+def async_task_runner(action, account):
+    # 供定时任务 (KEEPALIVE / RESTART) 调用的入列入口
+    enqueue_task(action, [account], "CRON")
+
+def bot_action_runner(action, target_id=None):
+    # 供 TG Bot 和 Web 调用的入列入口
+    target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
+    if not target_accounts:
+        msg = f"❌ 未找到 ID 为 <b>{target_id}</b> 的账号配置！"
+        logger.error(msg.replace("<b>", "").replace("</b>", ""))
+        send_tg_msg(msg)
+        return
+    enqueue_task(action, target_accounts, "MANUAL")
 
 def tunnel_health_check(account):
     url = account.get('tunnel_url')
     if not url: return
-    if action_lock.locked(): return
+    
+    # 熔断器 / 用户手动停止 -> 跳过探针
+    if account.get('probe_paused'): return
+    
+    # 系统有任务在跑 (正在拉浏览器重启等) -> 探针静默，防止误报和干扰
+    if system_busy_event.is_set(): return
         
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -333,24 +384,36 @@ def tunnel_health_check(account):
     
     if 400 <= status_code < 500:
         logger.info(f"[-] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🟢 隧道在线")
-        if account['fail_count'] > 0:
-            logger.info(f"[+] 隧道恢复：账号 {acc_id} 警报解除。")
+        if account['fail_count'] > 0 or account['auto_restart_count'] > 0:
+            logger.info(f"[+] 隧道恢复：账号 {acc_id} 警报解除，重置所有计数器。")
+            send_tg_msg(f"✅ <b>隧道已恢复在线 (账号 {acc_id})</b>\n探针连通测试成功，重置错误计数器。")
         account['fail_count'] = 0
+        account['auto_restart_count'] = 0
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
         logger.warning(f"[!] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🔴 隧道离线 ({account['fail_count']}/5)")
         
         if account['fail_count'] >= 5:
-            logger.error(f"🚨 [紧急避险] 账号 {acc_id} 隧道连续 5 次心跳失败，触发自动重启！")
+            # [修复 2] 熔断机制：如果已经自动挽救了3次还不行，直接弃疗并挂起探针
+            if account['auto_restart_count'] >= 3:
+                logger.error(f"🚨 [放弃重置] 账号 {acc_id} 连续 3 次重启后隧道依然离线，已暂停自动重启。")
+                send_tg_msg(f"🚨 <b>隧道严重故障 (账号 {acc_id})</b>\n已连续自动重启 3 次，隧道依然处于离线状态。探针及自动重启功能已被挂起，请手动登录 SAP BTP 网页端排查原因！")
+                account['probe_paused'] = True
+                account['fail_count'] = 0
+                return
+                
+            account['auto_restart_count'] += 1
             account['fail_count'] = 0
-            send_tg_msg(f"🚨 <b>隧道掉线警报 (账号 {acc_id})</b>\n检测到 HTTP 50x 或无法连接，连续 5 次心跳失败，正在触发紧急重置！")
-            threading.Thread(target=bot_action_runner, args=("RESTART", acc_id)).start()
+            
+            logger.error(f"🚨 [紧急重置] 账号 {acc_id} 隧道离线 5 次，触发自动重启 ({account['auto_restart_count']}/3)...")
+            send_tg_msg(f"🚨 <b>隧道掉线警报 (账号 {acc_id})</b>\n连续 5 次心跳失败，触发自动重启 ({account['auto_restart_count']}/3)...")
+            
+            # 将抢救任务丢入全局排队队列 (完美解决多探针同时报警的冲突问题)
+            enqueue_task("RESTART", [account], "PROBE")
 
-# [新增功能] 自动清理探针日志
 def clean_probe_logs():
     try:
-        # 保留不包含 "隧道探针" 的所有核心日志
         filtered_logs = [log for log in list(log_queue) if "隧道探针" not in log]
         log_queue.clear()
         log_queue.extend(filtered_logs)
@@ -391,13 +454,16 @@ if bot:
         bot.reply_to(message, f"⏳ 正在查询 {len(target_accounts)} 个账号的状态，请稍候...", parse_mode="HTML")
         
         def _check():
-            sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
-            report = f"📊 <b>后台任务状态</b>: {sys_status}\n\n"
+            # [修复 3] 使用 Event 判断系统繁忙状态
+            sys_status = "🔴 繁忙 (执行中)" if system_busy_event.is_set() else "🟢 空闲"
+            report = f"📊 <b>后台排队/运行状态</b>: {sys_status}\n\n"
             
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
+                probe_status = "⏸️ 已挂起" if acc['probe_paused'] else f"🔄 运行中 (重置:{acc['auto_restart_count']}/3)"
                 report += f"👤 <b>账号 {acc['id']}</b> ({acc['email']})\n"
-                report += f"☁️ 状态: <b>{status}</b>\n\n"
+                report += f"☁️ 容器状态: <b>{status}</b>\n"
+                report += f"🛡️ 探针状态: {probe_status}\n\n"
             
             bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
             
@@ -410,14 +476,13 @@ if bot:
         command = parts[0].replace("/", "").upper()
         target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
         
-        threading.Thread(target=bot_action_runner, args=(command, target_id)).start()
+        bot_action_runner(command, target_id)
 
 # ==========================================
-# 7. Flask Web 守护服务 (极致美化前端)
+# 7. Flask Web 守护服务
 # ==========================================
 app = Flask(__name__)
 
-# 全新果冻玻璃质感 MacOS 终端风格 HTML
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh">
@@ -428,41 +493,25 @@ HTML_TEMPLATE = """
     <style>
         :root { --main-bg: #050505; --term-bg: #0a0a0a; --green: #00ff41; --green-glow: #00ff4133; }
         body { background: var(--main-bg); color: var(--green); font-family: 'Consolas', 'Fira Code', monospace; margin: 0; padding: 2vh 5vw; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
-        
-        /* 终端主体带阴影和圆角 */
         .terminal-container { flex: 1; display: flex; flex-direction: column; background: var(--term-bg); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.8), 0 0 0 1px #333; overflow: hidden; margin-bottom: 10px; }
-        
-        /* MacOS 风格顶栏 */
         .header { background: #1a1a1a; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; }
         .mac-btns { display: flex; gap: 8px; }
         .mac-btn { width: 12px; height: 12px; border-radius: 50%; }
         .btn-close { background: #ff5f56; } .btn-min { background: #ffbd2e; } .btn-max { background: #27c93f; }
         .title { font-weight: bold; color: #ccc; font-size: 0.9rem; letter-spacing: 1px; }
-        
-        /* 闪烁状态灯 */
         .status-indicator { font-size: 0.85rem; color: var(--green); display: flex; align-items: center; gap: 6px; }
         .dot { width: 8px; height: 8px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); animation: blink 2s infinite; }
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        
-        /* 日志输出区 */
         #terminal { flex: 1; overflow-y: auto; padding: 20px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
         .log-line { margin: 2px 0; text-shadow: 0 0 2px var(--green-glow); }
         .INFO { color: var(--green); } .WARNING { color: #ffb86c; } .ERROR { color: #ff5555; }
-        
-        /* 命令点击按钮样式 (核心优化) */
         .cmd-clickable { color: #8be9fd; background: #282a36; padding: 1px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s ease; border: 1px solid #6272a4; margin: 0 2px; font-weight: bold;}
         .cmd-clickable:hover { background: #6272a4; color: #fff; box-shadow: 0 0 8px #8be9fd; }
-        
-        /* 极客输入框 */
         #input-area { background: #111; padding: 15px 20px; display: flex; align-items: center; border-radius: 10px; box-shadow: 0 5px 15px rgba(0,0,0,0.5), 0 0 0 1px #333; }
         #cmd-prefix { color: #ff79c6; margin-right: 12px; font-weight: bold; font-size: 15px;}
         #cmdInput { flex: 1; background: transparent; border: none; color: #f8f8f2; font-family: inherit; font-size: 15px; outline: none; }
         #cmdInput::placeholder { color: #6272a4; }
-        
-        /* 滚动条美化 */
         ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: var(--term-bg); } ::-webkit-scrollbar-thumb { background: #444; border-radius: 5px; } ::-webkit-scrollbar-thumb:hover { background: #666; }
-        
-        /* 静默 Toast 提示窗 */
         #toast { position: fixed; bottom: 80px; right: 5vw; background: #282a36; color: #50fa7b; padding: 10px 20px; border-radius: 6px; border: 1px solid #50fa7b; opacity: 0; transition: opacity 0.3s ease; pointer-events: none; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.6); font-weight: bold; }
     </style>
 </head>
@@ -495,16 +544,10 @@ HTML_TEMPLATE = """
             autoScroll = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10; 
         });
 
-        // 全新：指令点击、复制、并自动填入输入框函数
         window.copyToInput = function(cmdText) {
-            // 填入输入框并加一个空格，方便用户补数字 ID
             cmdInput.value = cmdText + ' ';
             cmdInput.focus();
-            
-            // 静默复制到剪贴板
             navigator.clipboard.writeText(cmdText).catch(err => {});
-            
-            // 弹出炫酷的 Toast 气泡
             toast.innerText = `已自动填入指令: ${cmdText} 按回车执行`;
             toast.style.opacity = '1';
             setTimeout(() => { toast.style.opacity = '0'; }, 2000);
@@ -521,7 +564,6 @@ HTML_TEMPLATE = """
                     if (log.includes('[WARNING]')) cls = 'WARNING';
                     if (log.includes('[ERROR]') || log.includes('失败') || log.includes('异常') || log.includes('🚨')) cls = 'ERROR';
                     
-                    // 神奇魔法：利用正则表达式，自动将 /status 等命令变成可点击的蓝色发光按钮
                     let formattedLog = log.replace(/(\\/(?:status|stop|start|restart|sap)\\b)/g, 
                         '<span class="cmd-clickable" onclick="copyToInput(\\'$1\\')">$1</span>');
                         
@@ -600,8 +642,8 @@ def web_command(token):
     logger.info(f"💻 [Web终端] {cmd_str}")
     
     if command in ['start', 'stop', 'restart']:
-        threading.Thread(target=bot_action_runner, args=(command.upper(), target_id)).start()
-        return jsonify({"status": "Command dispatched"})
+        bot_action_runner(command.upper(), target_id)
+        return jsonify({"status": "Command dispatched to queue"})
         
     elif command == 'status':
         target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
@@ -610,7 +652,7 @@ def web_command(token):
             return jsonify({"status": "Not found"})
         
         def _check_web():
-            sys_status = "🔴 繁忙 (执行中)" if action_lock.locked() else "🟢 空闲"
+            sys_status = "🔴 繁忙 (排队/执行中)" if system_busy_event.is_set() else "🟢 空闲"
             logger.info(f"📊 [查询报告] 后台任务状态: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
@@ -639,6 +681,7 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
+    logger.info("========================================")
     logger.info(f"🚀 SAP BAS 全自动保活 开始运行! 检测到 {len(ACCOUNTS)} 个有效账号。")
     
     if not ACCOUNTS:
@@ -652,11 +695,10 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO探针:已启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO 探针:已启用)")
         else:
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO探针:未启用)")
+            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO 探针:未启用)")
 
-    # [新增功能 2] 每 1 小时自动清理内存中多余的探针日志
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 
     scheduler.start()
@@ -664,7 +706,7 @@ if __name__ == '__main__':
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info(f"💻 Web 终端面板已就绪！")
+    logger.info(f"[+] Web 终端面板已就绪！")
     
     for acc in ACCOUNTS:
         if acc.get('tunnel_url'):

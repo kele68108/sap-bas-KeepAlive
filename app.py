@@ -50,7 +50,7 @@ task_queue = queue.Queue()
 system_busy_event = threading.Event()
 
 # ==========================================
-# 2. 极简复古日志系统 (剔除现代 Emoji)
+# 2. 极简复古日志系统
 # ==========================================
 log_queue = deque(maxlen=2000)
 
@@ -72,7 +72,7 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 # ==========================================
-# 3. 核心通讯组件 (复古几何符号)
+# 3. 核心通讯组件
 # ==========================================
 bot = telebot.TeleBot(TG_BOT_TOKEN) if TG_BOT_TOKEN else None
 
@@ -95,7 +95,7 @@ def send_tg_photo(photo_path, caption=""):
             logger.error(f"<SYS_ERR_> TG 图片发送异常: {str(e)}        [FAIL]")
 
 # ==========================================
-# 4. 业务逻辑层 (Playwright 操作 BAS)
+# 4. 业务逻辑层
 # ==========================================
 class SAPController:
     @staticmethod
@@ -390,7 +390,7 @@ def clean_probe_logs():
         logger.error(f"<SYS_ERR_> 内存清理程序陷入死锁: {str(e)}        [FAIL]")
 
 # ==========================================
-# 6. Telegram Bot ChatOps (复古寻呼机排版)
+# 6. Telegram Bot ChatOps
 # ==========================================
 if bot:
     @bot.message_handler(commands=['sap'])
@@ -440,7 +440,7 @@ if bot:
         bot_action_runner(command, target_id)
 
 # ==========================================
-# 7. Flask Web 守护服务 (硬核 CRT 终端风格)
+# 7. Flask Web 守护服务
 # ==========================================
 app = Flask(__name__)
 
@@ -463,7 +463,7 @@ HTML_TEMPLATE = """
             --cmd-bg: transparent; --cmd-col: #58a6ff; --cmd-border: #58a6ff; --cmd-hover: #1f6feb;
             --log-info: #34d399; --log-warn: #fbbf24; --log-err: #f87171;
             --shadow-window: 0 0 40px rgba(52, 211, 153, 0.1), 0 0 0 1px #30363d;
-            --bloom: 0 0 3px rgba(52, 211, 153, 0.4); /* 荧光光晕 */
+            --bloom: 0 0 3px rgba(52, 211, 153, 0.4); 
         }
         :root[data-theme="light"] { 
             --bg-body: #e5e7eb; --bg-window: #f6f8fa; --bg-header: #e1e4e8;
@@ -478,14 +478,12 @@ HTML_TEMPLATE = """
         
         body { background: var(--bg-body); color: var(--text-norm); font-family: 'VT323', 'Consolas', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; text-shadow: var(--bloom); font-size: 17px;}
         
-        /* CRT 扫描线滤镜 */
         body::after {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
             z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
         }
         
-        /* 绝对中心缩放容器 (修复左上角吸附) */
         #login-view, #app-view { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             display: flex; flex-direction: column; align-items: center; justify-content: center; 
@@ -497,7 +495,6 @@ HTML_TEMPLATE = """
         
         .mac-window { background: var(--bg-window); border-radius: 8px; box-shadow: var(--shadow-window); overflow: hidden; border: 1px solid var(--border-col); display: flex; flex-direction: column; width: 100%; position: relative; z-index: 20;}
         
-        /* 顶栏 */
         .mac-header { background: var(--bg-header); height: 26px; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border-col); user-select: none;}
         .mac-btns { display: flex; gap: 8px; width: 60px; align-items: center;}
         .mac-btn { width: 11px; height: 11px; border-radius: 50%; cursor: pointer; transition: filter 0.2s;}
@@ -512,7 +509,6 @@ HTML_TEMPLATE = """
         .mac-title { font-size: 15px; font-weight: bold; color: var(--text-muted); letter-spacing: 1px; text-align: center; flex: 1;}
         .mac-spacer { width: 60px; } 
 
-        /* === 登录界面 === */
         #login-view .mac-window { width: 380px; height: auto; }
         .login-content { padding: 40px; text-align: center; }
         .login-content h2 { margin: 0 0 25px; font-size: 24px; color: var(--text-norm); font-weight: normal; letter-spacing: 2px;}
@@ -521,12 +517,10 @@ HTML_TEMPLATE = """
         .login-content button { width: 100%; padding: 12px; background: transparent; color: var(--text-norm); border: 1px solid var(--text-norm); border-radius: 4px; font-family: inherit; font-size: 18px; cursor: pointer; transition: 0.2s; text-shadow: var(--bloom);}
         .login-content button:hover { background: var(--text-norm); color: var(--bg-window); }
 
-        /* === 终端主界面 === */
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
         #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
         
-        /* 冻结区与滚动区 */
         #boot-sequence { flex-shrink: 0; margin-bottom: 10px; }
         .separator { color: var(--text-muted); margin: 5px 0 15px 0; user-select: none; }
         #live-logs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
@@ -534,7 +528,6 @@ HTML_TEMPLATE = """
         .log-line { margin: 2px 0; }
         .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } .ERROR { color: var(--log-err); font-weight: bold;}
         
-        /* DOS 反显特效 */
         .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
         .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
         .inv-wait { background: var(--log-warn); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
@@ -543,13 +536,11 @@ HTML_TEMPLATE = """
         .cmd-clickable { color: var(--cmd-col); padding: 0 4px; cursor: pointer; border: 1px solid var(--cmd-border); margin: 0 2px; transition: 0.1s;}
         .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
-        /* 打字机特效行与方块光标 */
         #typewriter-line { display: flex; align-items: center; min-height: 1.4em;}
         #typewriter-text { white-space: pre; }
         .cursor { display: inline-block; width: 10px; height: 1em; background-color: var(--text-norm); margin-left: 2px; animation: cursor-blink 1s step-end infinite; box-shadow: var(--bloom);}
         @keyframes cursor-blink { 50% { opacity: 0; } }
         
-        /* 底部输入区 */
         #input-area { background: var(--input-bg); padding: 15px 20px; display: flex; align-items: center; border-top: 1px solid var(--border-col); }
         #cmd-prefix { color: var(--cmd-col); margin-right: 12px; font-weight: bold;}
         #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-norm); font-family: inherit; font-size: 17px; outline: none; text-shadow: var(--bloom);}
@@ -557,7 +548,7 @@ HTML_TEMPLATE = """
         
         ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-col); border-radius: 0; } ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
         
-        #toast { position: fixed; bottom: 80px; right: 5vw; background: var(--toast-bg); color: var(--toast-text); padding: 8px 16px; border border: 1px solid var(--text-norm); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; box-shadow: var(--shadow-window); font-family: inherit; font-size: 16px;}
+        #toast { position: fixed; bottom: 80px; right: 5vw; background: var(--toast-bg); color: var(--toast-text); padding: 8px 16px; border: 1px solid var(--text-norm); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; box-shadow: var(--shadow-window); font-family: inherit; font-size: 16px;}
         #toast.show { opacity: 1; }
     </style>
 </head>
@@ -577,7 +568,7 @@ HTML_TEMPLATE = """
             <div class="login-content">
                 <h2>SYS_CONSOLE</h2>
                 <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button onclick="doLogin()">[ ENTER ]</button>
+                <button id="loginBtn" onclick="doLogin()">[ ENTER ]</button>
             </div>
         </div>
     </div>
@@ -620,7 +611,6 @@ HTML_TEMPLATE = """
         let autoScroll = true;
         let logInterval = null;
 
-        // 打字机流控
         let bootLogsRendered = false;
         let lastLogCount = 0;
         let typeQueue = [];
@@ -645,16 +635,41 @@ HTML_TEMPLATE = """
         async function doLogin() {
             const pass = document.getElementById('loginPass').value.trim();
             if (!pass) return;
+            
+            const btn = document.getElementById('loginBtn');
+            const origText = btn.innerText;
+            btn.innerText = '[ VERIFYING... ]';
+            
             try {
                 const res = await fetch('/api/verify', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ token: pass })
                 });
+                
                 if (res.status === 200) {
                     localStorage.setItem('bas_token', pass);
                     enterSystem();
-                } else alert('ACCESS DENIED');
-            } catch(e) { alert('NET_ERR'); }
+                    btn.innerText = origText;
+                } else {
+                    btn.innerText = '[ ACCESS DENIED ]';
+                    btn.style.color = 'var(--log-err)';
+                    btn.style.borderColor = 'var(--log-err)';
+                    setTimeout(() => {
+                        btn.innerText = origText;
+                        btn.style.color = '';
+                        btn.style.borderColor = '';
+                    }, 2000);
+                }
+            } catch(e) { 
+                btn.innerText = '[ NET ERR ]';
+                btn.style.color = 'var(--log-warn)';
+                btn.style.borderColor = 'var(--log-warn)';
+                setTimeout(() => { 
+                    btn.innerText = origText; 
+                    btn.style.color = '';
+                    btn.style.borderColor = '';
+                }, 2000);
+            }
         }
 
         function doLogout() {
@@ -676,7 +691,7 @@ HTML_TEMPLATE = """
             document.getElementById('typewriter-text').textContent = '';
             
             fetchLogs();
-            logInterval = setInterval(fetchLogs, 1500); // 1.5s高频轮询模拟流
+            logInterval = setInterval(fetchLogs, 1500); 
             cmdInput.focus();
         }
 
@@ -689,6 +704,8 @@ HTML_TEMPLATE = """
             cmdInput.focus();
             navigator.clipboard.writeText(cmdText).catch(err => {});
             toast.innerText = `[OK] COPIED: ${cmdText}`;
+            toast.style.borderColor = 'var(--text-norm)';
+            toast.style.color = 'var(--toast-text)';
             toast.className = 'show';
             setTimeout(() => { toast.className = ''; }, 2000);
         }
@@ -707,11 +724,9 @@ HTML_TEMPLATE = """
             } catch (e) {}
         }
 
-        // 核心渲染与切割逻辑
         function processLogStream(logs) {
-            // 寻找引导程序的最后一条边界
             let splitIndex = logs.findIndex(l => l.includes("Web 终端与鉴权系统已就绪！"));
-            if(splitIndex === -1) splitIndex = -1; // 找不到说明被清理了，全当live
+            if(splitIndex === -1) splitIndex = -1; 
 
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
@@ -719,11 +734,10 @@ HTML_TEMPLATE = """
                 bootLogsRendered = true;
                 lastLogCount = splitIndex + 1;
             } else if (!bootLogsRendered) {
-                lastLogCount = 0; // 兜底
+                lastLogCount = 0; 
             }
             
             if (logs.length < lastLogCount) {
-                // 后端队列溢出重置了
                 lastLogCount = splitIndex !== -1 ? splitIndex + 1 : 0;
                 liveLogsDiv.innerHTML = ''; 
                 return;
@@ -737,7 +751,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        // 纯 HTML 渲染转换 (反显特效)
         function formatLogHTML(log) {
             let cls = 'INFO';
             if (log.includes('[WARN]')) cls = 'WARNING';
@@ -753,7 +766,6 @@ HTML_TEMPLATE = """
             return `<div class="log-line ${cls}">${formatted}</div>`;
         }
 
-        // 打字机动画流
         function runTypewriter() {
             if (isTyping || typeQueue.length === 0) return;
             isTyping = true;
@@ -761,7 +773,6 @@ HTML_TEMPLATE = """
             let line = typeQueue.shift();
             let typeSpan = document.getElementById('typewriter-text');
             
-            // 防堆积：如果突然积压大量日志，直接秒出不再慢吞吞打字
             if(typeQueue.length > 3) {
                 typeSpan.innerHTML = '';
                 liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(line));
@@ -779,7 +790,7 @@ HTML_TEMPLATE = """
                     typeSpan.textContent += line.charAt(index);
                     index++;
                     if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
-                    setTimeout(typeChar, 8); // 8ms 极速打字
+                    setTimeout(typeChar, 8); 
                 } else {
                     typeSpan.textContent = '';
                     liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(line));
@@ -822,10 +833,6 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
-
-# ==========================================
-# 8. Flask 后端路由 (全量适配安全验证)
-# ==========================================
 
 @app.route('/')
 def index():

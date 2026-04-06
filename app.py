@@ -422,7 +422,7 @@ if bot:
 
         bot.reply_to(message, f"⏳ 正在查询状态，请稍候...", parse_mode="HTML")
         
-def _check():
+        def _check():
             sys_status = "🔴 繁忙 (执行中)" if system_busy_event.is_set() else "🟢 空闲"
             report = f"📊 <b>任务排队/运行状态</b>: {sys_status}\n\n"
             for acc in target_accounts:
@@ -430,8 +430,9 @@ def _check():
                 report += f"👤 <b>账号 {acc['id']}</b> ({acc['email']})\n"
                 report += f"☁️ 状态: <b>{status}</b>\n\n"
             bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
+            
         threading.Thread(target=_check).start()
-
+        
     @bot.message_handler(commands=['start', 'stop', 'restart'])
     def handle_actions(message):
         if not check_tg_auth(message): return

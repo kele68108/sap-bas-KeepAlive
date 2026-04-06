@@ -422,15 +422,13 @@ if bot:
 
         bot.reply_to(message, f"⏳ 正在查询状态，请稍候...", parse_mode="HTML")
         
-        def _check():
+def _check():
             sys_status = "🔴 繁忙 (执行中)" if system_busy_event.is_set() else "🟢 空闲"
-            report = f"📊 <b>排队/运行状态</b>: {sys_status}\n\n"
+            report = f"📊 <b>任务排队/运行状态</b>: {sys_status}\n\n"
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                probe_status = "⏸️ 已挂起" if acc['probe_paused'] else f"🔄 运行中 (重置:{acc['auto_restart_count']}/3)"
                 report += f"👤 <b>账号 {acc['id']}</b> ({acc['email']})\n"
-                report += f"☁️ 容器状态: <b>{status}</b>\n"
-                report += f"🛡️ 探针状态: {probe_status}\n\n"
+                report += f"☁️ 状态: <b>{status}</b>\n\n"
             bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
         threading.Thread(target=_check).start()
 
@@ -775,7 +773,7 @@ def web_command():
         
         def _check_web():
             sys_status = "🔴 繁忙 (排队/执行中)" if system_busy_event.is_set() else "🟢 空闲"
-            logger.info(f"📊 [查询报告] 后台运行队列状态: {sys_status}")
+            logger.info(f"📊 [查询报告] 任务排队/运行状态: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
                 logger.info(f"👤 账号 {acc['id']} ({acc['email']}) -> ☁️ 状态: {status}")

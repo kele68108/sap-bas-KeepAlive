@@ -542,9 +542,9 @@ HTML_TEMPLATE = """
             <svg class="logo-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle>
             </svg>
-            <h2>SAP BAS</h2>
-            <p>请输入管理员密钥以继续</p>
-            <input type="password" id="loginPass" placeholder="访问密钥 (WEB_TOKEN)" onkeypress="if(event.key==='Enter') doLogin()">
+            <h2>SAP BAS KEEPALIVE</h2>
+            <p>请输入管理员密码以继续</p>
+            <input type="password" id="loginPass" placeholder="请输入管理员密码" onkeypress="if(event.key==='Enter') doLogin()">
             <button onclick="doLogin()">授权访问 <span>&rarr;</span></button>
         </div>
     </div>
@@ -571,7 +571,7 @@ HTML_TEMPLATE = """
                 <div id="terminal"></div>
                 <div id="input-area">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line></svg>
-                    <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="输入指令 或 点击上方命令蓝字快捷复制 (例如: /sap, /start 1)">
+                    <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 可精准控制单个账号，不加则控制所有账号。">
                 </div>
             </div>
         </div>
@@ -661,7 +661,7 @@ HTML_TEMPLATE = """
             cmdInput.value = cmdText + ' ';
             cmdInput.focus();
             navigator.clipboard.writeText(cmdText).catch(err => {});
-            toast.innerText = `✅ 已快捷填入指令: ${cmdText}`;
+            toast.innerText = `✅ 已自动填入指令: ${cmdText} 按回车执行`;
             toast.className = 'show';
             setTimeout(() => { toast.className = ''; }, 2000);
         }
@@ -813,7 +813,6 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info("========================================")
     logger.info(f"🚀 SAP BAS 全自动保活 开始运行! 检测到 {len(ACCOUNTS)} 个有效账号。")
     
     if not ACCOUNTS:

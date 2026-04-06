@@ -21,7 +21,6 @@ TG_CHAT_ID = os.environ.get("TG_CHAT_ID")
 WEB_TOKEN = os.environ.get("WEB_TOKEN", "default_token")
 PORT = int(os.environ.get("PORT", 8080))
 
-# URL 自动格式化函数
 def format_url(url_str):
     if not url_str: return None
     url_str = url_str.strip()
@@ -29,7 +28,6 @@ def format_url(url_str):
     elif url_str.startswith("http://"): url_str = url_str[7:]
     return f"https://{url_str}"
 
-# 动态加载所有配置了 SAP_EMAIL_X 的账号
 ACCOUNTS = []
 for i in range(1, 11):
     email = os.environ.get(f"SAP_EMAIL_{i}")
@@ -52,7 +50,7 @@ task_queue = queue.Queue()
 system_busy_event = threading.Event()
 
 # ==========================================
-# 2. 极客级内存日志系统
+# 2. 极简复古日志系统 (剔除现代 Emoji)
 # ==========================================
 log_queue = deque(maxlen=2000)
 
@@ -74,7 +72,7 @@ stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
 
 # ==========================================
-# 3. 核心通讯组件
+# 3. 核心通讯组件 (复古几何符号)
 # ==========================================
 bot = telebot.TeleBot(TG_BOT_TOKEN) if TG_BOT_TOKEN else None
 
@@ -86,7 +84,7 @@ def send_tg_msg(text):
         try:
             bot.send_message(TG_CHAT_ID, text, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"TG 通知发送失败: {str(e)}")
+            logger.error(f"<SYS_ERR_> TG 通知发送异常: {str(e)}        [FAIL]")
 
 def send_tg_photo(photo_path, caption=""):
     if bot and TG_CHAT_ID and os.path.exists(photo_path):
@@ -94,7 +92,7 @@ def send_tg_photo(photo_path, caption=""):
             with open(photo_path, 'rb') as photo:
                 bot.send_photo(TG_CHAT_ID, photo, caption=caption, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"TG 图片发送失败: {str(e)}")
+            logger.error(f"<SYS_ERR_> TG 图片发送异常: {str(e)}        [FAIL]")
 
 # ==========================================
 # 4. 业务逻辑层 (Playwright 操作 BAS)
@@ -138,7 +136,7 @@ class SAPController:
         email = account['email']
         password = account['password']
         
-        logger.info(f"🚀 开始执行任务: [{action_type}] (账号 {acc_id})")
+        logger.info(f"<EXEC_JOB> 开始拉起任务: [{action_type}] (账号 {acc_id})")
         work_dir = "/tmp"
         
         try:
@@ -149,7 +147,7 @@ class SAPController:
                 api_request = context.request
 
                 try:
-                    logger.info(f"[-] 账号 {acc_id} 正在模拟登录...")
+                    logger.info(f" > AUTH_REQ 账号 {acc_id} 请求登录入口...           [WAIT]")
                     page.goto(f"{region_url}/index.html")
                     page.locator("input[name='j_username'], input[type='email']").fill(email)
                     if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
@@ -171,13 +169,13 @@ class SAPController:
                     except Exception:
                         pass
                     
-                    logger.info(f"[+] 账号 {acc_id} 登录成功，正在调用API...")
+                    logger.info(f" < AUTH_ACK 账号 {acc_id} 令牌下发完成，接管API... [ OK ]")
                     req_headers = {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
                     ws_api_url = f"{region_url}/ws-manager/api/v1/workspace"
                     workspaces = api_request.get(ws_api_url, headers=req_headers).json()
                     
                     if not workspaces:
-                        logger.error(f"账号 {acc_id} 未找到任何工作区")
+                        logger.error(f"[!!FATAL!!] 账号 {acc_id} 云端未挂载任何工作区实体 [FAIL]")
                         return False
                         
                     ws = workspaces[0]
@@ -187,18 +185,18 @@ class SAPController:
                     status = ws.get("runtime", {}).get("status")
                     
                     if action_type == "STOP" and status == "STOPPED":
-                        msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>STOPPED</b> 状态，无需重复停止。"
+                        msg = f"► <b>操作合并 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 已经是 <b>STOPPED</b> 状态，任务跳过。"
                         send_tg_msg(msg)
-                        logger.info(f"[-] 账号 {acc_id} 状态已是 STOPPED，无需重复停止。")
+                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 STOPPED 状态   [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
                         return True
                         
                     if action_type == "START" and status == "RUNNING":
-                        msg = f"ℹ️ <b>操作跳过 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 当前已经是 <b>RUNNING</b> 状态，无需重复启动。\n💡 <i>提示：若ARGO隧道不通，请使用 /restart 进行重置。</i>"
+                        msg = f"► <b>操作合并 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 已经是 <b>RUNNING</b> 状态，任务跳过。\n💡 <i>若ARGO离线请使用 /restart。</i>"
                         send_tg_msg(msg)
-                        logger.info(f"[-] 账号 {acc_id} 状态已是 RUNNING，无需重复启动。")
+                        logger.info(f" < TASK_END 账号 {acc_id} 目标已是 RUNNING 状态   [ OK ]")
                         account['probe_paused'] = False
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -219,21 +217,21 @@ class SAPController:
                             time.sleep(10)
                             curr_ws = next((w for w in api_request.get(ws_api_url, headers=req_headers).json() if w.get("id") == ws_uuid or w.get("config", {}).get("id") == ws_uuid), {})
                             curr_status = curr_ws.get("runtime", {}).get("status", "UNKNOWN")
-                            logger.info(f"[-] 账号 {acc_id} 状态轮询: 期望={target_status}, 当前={curr_status}")
+                            logger.info(f" > WS_POLL_ 账号 {acc_id} 等待:{target_status}, 当前:{curr_status} [WAIT]")
                             if curr_status == target_status:
                                 return True
                         return False
 
                     if action_type in ["RESTART", "STOP"] and status == "RUNNING":
-                        logger.info(f"[*] 账号 {acc_id} 正在执行停止操作...")
+                        logger.info(f" > WS_HALT_ 账号 {acc_id} 发送休眠信令...           [WAIT]")
                         if set_status(True, "STOPPED"):
-                            logger.info(f"[+] 账号 {acc_id} 工作区已停止")
+                            logger.info(f" < WS_HALT_ 账号 {acc_id} 容器物理挂起成功       [ OK ]")
                             status = "STOPPED"
                     
                     if action_type == "STOP":
-                        msg = f"🔴 <b>SAP BAS {action_type} 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已停止服务！"
+                        msg = f"■ <b>SAP BAS 停止指令 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已成功下线资源。"
                         send_tg_msg(msg)
-                        logger.info(f"[+] 账号 {acc_id} STOP 任务结束，已发送通知。")
+                        logger.info(f" < TASK_END 账号 {acc_id} STOP指令执行完毕       [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -241,12 +239,12 @@ class SAPController:
                         
                     if action_type in ["START", "RESTART", "KEEPALIVE"] and status in ["STOPPED", "STARTING", "RUNNING"]:
                         if status == "STOPPED":
-                            logger.info(f"[*] 账号 {acc_id} 正在执行启动操作...")
+                            logger.info(f" > WS_BOOT_ 账号 {acc_id} 申请分配算力资源...      [WAIT]")
                             if not set_status(False, "RUNNING"):
-                                logger.error(f"[!] 账号 {acc_id} 启动超时")
+                                logger.error(f"[!!FATAL!!] 账号 {acc_id} 容器启动严重超时       [FAIL]")
                                 return False
                                 
-                        logger.info(f"[*] 账号 {acc_id} 开始进行 UI 穿透...")
+                        logger.info(f" > UI_PENET 账号 {acc_id} 注入无头浏览器探针...    [WAIT]")
                         page.goto(f"{region_url}/index.html")
                         time.sleep(8)
                         
@@ -254,10 +252,10 @@ class SAPController:
                         ws_link = ws_frame.locator(f"a[href*='{ws_uuid}']").first
                         ws_link.wait_for(state="visible", timeout=20000)
                         ws_link.click(force=True)
-                        logger.info(f"[-] 账号 {acc_id} 正在加载 IDE (等待30秒)...")
+                        logger.info(f" > IDE_LOAD 账号 {acc_id} 等待 IDE 核心初始化...   [WAIT]")
                         time.sleep(30)
                         
-                        logger.info(f"[-] 账号 {acc_id} 执行弹窗清理策略...")
+                        logger.info(f" > UI_CLEAN 账号 {acc_id} 执行模态框压制策略...    [WAIT]")
                         for _ in range(3):
                             page.keyboard.press("Escape")
                             time.sleep(0.5)
@@ -265,8 +263,8 @@ class SAPController:
                         screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
-                            send_tg_photo(screenshot_path, f"🎯 <b>SAP BAS {action_type} 任务完成 (账号 {acc_id})</b>\n工作区 [<b>{display_name}</b>] 已唤醒服务！")
-                        logger.info(f"[+] 🎯 账号 {acc_id} [{action_type}] 任务成功。")
+                            send_tg_photo(screenshot_path, f"■ <b>SAP BAS {action_type} 完毕 (账号 {acc_id})</b>\n目标 [<b>{display_name}</b>] 算力节点已唤醒！")
+                        logger.info(f" < TASK_END 账号 {acc_id} [{action_type}] 任务完成 [ OK ]")
                         
                         account['probe_paused'] = False
                         account['fail_count'] = 0
@@ -274,18 +272,18 @@ class SAPController:
                         return True
                         
                 except Exception as inner_e:
-                    logger.error(f"[!] 账号 {acc_id} 严重异常: {str(inner_e)}")
+                    logger.error(f"[!!FATAL!!] 账号 {acc_id} 运行时抛出致命异常       [FAIL]")
                     try:
                         error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
-                        send_tg_photo(error_shot, f"❌ <b>执行 [{action_type}] 发生异常 (账号 {acc_id})</b>\n请查看云端实时截图排查。\n报错: <code>{str(inner_e)}</code>")
+                        send_tg_photo(error_shot, f"▲ <b>核心执行异常 (账号 {acc_id})</b>\n动作: {action_type}\n反馈: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
-                        logger.error(f"保存崩溃截图失败: {pic_e}")
+                        logger.error(f"<SYS_ERR_> 崩溃堆栈快照导出失败: {pic_e}     [FAIL]")
                     return False
                 finally:
                     browser.close()
         except Exception as e:
-            logger.error(f"[!] 浏览器环境拉起失败: {str(e)}")
+            logger.error(f"[!!FATAL!!] 浏览器隔离沙盒拉起失败: {str(e)}      [FAIL]")
             return False
 
 # ==========================================
@@ -298,9 +296,9 @@ def enqueue_task(action, target_accounts, source):
         "source": source
     })
     if source == "MANUAL":
-        acc_str = f"账号 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全部 {len(target_accounts)} 个账号"
-        msg = f"✅ 已加入排队系统：即将为 <b>{acc_str}</b> 依次执行 <b>{action}</b>..."
-        logger.info(msg.replace("<b>", "").replace("</b>", ""))
+        acc_str = f"账号 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全局 {len(target_accounts)} 节点"
+        msg = f"► <b>系统调度列队</b>\n目标: <b>{acc_str}</b>\n指令: <b>{action}</b>..."
+        logger.info(f"<SCHEDULR> 手动指令 [{action}] 压入系统队列          [ OK ]")
         send_tg_msg(msg)
 
 def global_task_worker():
@@ -318,12 +316,12 @@ def global_task_worker():
                 if len(accounts) > 1:
                     time.sleep(3)
         except Exception as e:
-            logger.error(f"Worker 执行流水线异常: {e}")
+            logger.error(f"<SYS_ERR_> 流水线工人线程异常: {e}           [FAIL]")
         finally:
             system_busy_event.clear()
             if source == "MANUAL":
-                finish_msg = "🎉 <b>后台任务已全部执行完毕，系统资源已释放，可以下发新的指令。</b>"
-                logger.info(finish_msg.replace("<b>", "").replace("</b>", ""))
+                finish_msg = "■ <b>终端报告</b>\n系统排队任务已清空，硬件锁已释放。"
+                logger.info("<SCHEDULR> 手动调度队列执行完毕，释放系统锁      [ OK ]")
                 send_tg_msg(finish_msg)
             task_queue.task_done()
 
@@ -335,8 +333,8 @@ def async_task_runner(action, account):
 def bot_action_runner(action, target_id=None):
     target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
     if not target_accounts:
-        msg = f"❌ 未找到 ID 为 <b>{target_id}</b> 的账号配置！"
-        logger.error(msg.replace("<b>", "").replace("</b>", ""))
+        msg = f"▲ 未匹配到目标标识 [<b>{target_id}</b>] 的参数块！"
+        logger.error(f"<SCHEDULR> 目标标识 {target_id} 索引越界或未装载      [FAIL]")
         send_tg_msg(msg)
         return
     enqueue_task(action, target_accounts, "MANUAL")
@@ -357,55 +355,55 @@ def tunnel_health_check(account):
     acc_id = account['id']
     
     if 400 <= status_code < 500:
-        logger.info(f"[-] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🟢 隧道在线")
+        logger.info(f" > NET_PING 账号 {acc_id} 隧道心跳 (HTTP:{status_code}) ... [ OK ]")
         if account['fail_count'] > 0 or account['auto_restart_count'] > 0:
-            logger.info(f"[+] 隧道恢复：账号 {acc_id} 警报解除，重置计数器。")
-            send_tg_msg(f"✅ <b>隧道已恢复在线 (账号 {acc_id})</b>\n探针连通测试成功，重置错误计数器。")
+            logger.info(f" < NET_RECV 账号 {acc_id} 数据链路恢复，重置计数器 [ OK ]")
+            send_tg_msg(f"■ <b>数据链路已恢复 (账号 {acc_id})</b>\n隧道连通性测试通过，已解除警报。")
         account['fail_count'] = 0
         account['auto_restart_count'] = 0
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f"[!] 隧道探针: 账号 {acc_id} (状态码: {status_code}) -> 🔴 隧道离线 ({account['fail_count']}/5)")
+        logger.warning(f" > NET_PING 账号 {acc_id} 边缘节点阻断 ({account['fail_count']}/5)...  [WARN]")
         
         if account['fail_count'] >= 5:
             if account['auto_restart_count'] >= 3:
-                logger.error(f"🚨 [放弃重置] 账号 {acc_id} 连续 3 次重启后依然离线，已暂停自动重启。")
-                send_tg_msg(f"🚨 <b>隧道严重故障 (账号 {acc_id})</b>\n已连续自动重启 3 次，隧道依然处于离线状态。探针及自动重启功能已被挂起，请手动排查！")
+                logger.error(f"[!!FATAL!!] 账号 {acc_id} 连续 3 次硬启动无效，已挂起 [FAIL]")
+                send_tg_msg(f"▲ <b>硬件层级阻断 (账号 {acc_id})</b>\n连续 3 次深度重启后链路依然离线，已强制挂起探针触发器。")
                 account['probe_paused'] = True
                 account['fail_count'] = 0
                 return
                 
             account['auto_restart_count'] += 1
             account['fail_count'] = 0
-            logger.error(f"🚨 [紧急重置] 账号 {acc_id} 隧道断线，触发重启 ({account['auto_restart_count']}/3)...")
-            send_tg_msg(f"🚨 <b>隧道掉线警报 (账号 {acc_id})</b>\n连续 5 次心跳失败，触发自动重启 ({account['auto_restart_count']}/3)...")
+            logger.error(f"<SYS_CRIT> 账号 {acc_id} 链路丢包越界，拉起系统重置 ({account['auto_restart_count']}/3)...")
+            send_tg_msg(f"▲ <b>链路丢包告警 (账号 {acc_id})</b>\n探针连续 5 次超时，强制拉起重置序列 ({account['auto_restart_count']}/3)...")
             enqueue_task("RESTART", [account], "PROBE")
 
 def clean_probe_logs():
     try:
-        filtered_logs = [log for log in list(log_queue) if "隧道探针" not in log]
+        filtered_logs = [log for log in list(log_queue) if "NET_PING" not in log]
         log_queue.clear()
         log_queue.extend(filtered_logs)
-        logger.info("[*] 🧹 内存清理: 已自动清空过去 1 小时内的常规探针日志，保持面板极简。")
+        logger.info("<MEM_SWEEP> 常规网络嗅探流数据已从系统内存剥离     [ OK ]")
     except Exception as e:
-        logger.error(f"[!] 探针日志清理失败: {str(e)}")
+        logger.error(f"<SYS_ERR_> 内存清理程序陷入死锁: {str(e)}        [FAIL]")
 
 # ==========================================
-# 6. Telegram Bot ChatOps
+# 6. Telegram Bot ChatOps (复古寻呼机排版)
 # ==========================================
 if bot:
     @bot.message_handler(commands=['sap'])
     def handle_help(message):
         if not check_tg_auth(message): return
         help_text = (
-            "🤖 <b>SAP BAS KEEPALIVE</b>\n\n"
-            "-------- 可用命令 --------\n"
-            "🔹 /status   ( 查询 BAS )\n"
-            "🔹 /stop     ( 停止 BAS )\n"
-            "🔹 /start    ( 启动 BAS )\n"
-            "🔹 /restart  ( 重启 BAS )\n\n"
-            "💡 <i>提示：加上数字 ID (如 /start 1) 可控制单个账号。</i>"
+            "► <b>SAP BAS MAIN_FRAME</b>\n\n"
+            "----------- 核心指令 -----------\n"
+            "❖ /status   ( 实例状态查询 )\n"
+            "❖ /stop     ( 挂起服务算力 )\n"
+            "❖ /start    ( 唤醒服务算力 )\n"
+            "❖ /restart  ( 硬重置数据流 )\n\n"
+            "<i>附加参数: 指令+数字 (例: /start 1)</i>"
         )
         bot.reply_to(message, help_text, parse_mode="HTML")
 
@@ -417,22 +415,22 @@ if bot:
         target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
         
         if target_id and not target_accounts:
-            bot.reply_to(message, f"❌ 未找到 ID 为 {target_id} 的账号。", parse_mode="HTML")
+            bot.reply_to(message, f"▲ 未找到 ID 为 <b>{target_id}</b> 的配置块。", parse_mode="HTML")
             return
 
-        bot.reply_to(message, f"⏳ 正在查询状态，请稍候...", parse_mode="HTML")
+        bot.reply_to(message, f"⧗ 正在轮询边缘节点状态...", parse_mode="HTML")
         
         def _check():
-            sys_status = "🔴 繁忙 (执行中)" if system_busy_event.is_set() else "🟢 空闲"
-            report = f"📊 <b>任务排队/运行状态</b>: {sys_status}\n\n"
+            sys_status = "■ 繁忙 (执行中)" if system_busy_event.is_set() else "■ 空闲 (挂起)"
+            report = f"► <b>系统全局列队调度锁</b>: {sys_status}\n\n"
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                report += f"👤 <b>账号 {acc['id']}</b> ({acc['email']})\n"
-                report += f"☁️ 状态: <b>{status}</b>\n\n"
+                report += f"👤 <b>节点标识 {acc['id']}</b> ({acc['email']})\n"
+                report += f"■ 容器进程: <b>{status}</b>\n\n"
             bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
             
         threading.Thread(target=_check).start()
-        
+
     @bot.message_handler(commands=['start', 'stop', 'restart'])
     def handle_actions(message):
         if not check_tg_auth(message): return
@@ -442,97 +440,125 @@ if bot:
         bot_action_runner(command, target_id)
 
 # ==========================================
-# 7. Flask Web 守护服务 (纯正 macOS 终端风格)
+# 7. Flask Web 守护服务 (硬核 CRT 终端风格)
 # ==========================================
 app = Flask(__name__)
 
-# 完美复刻的 macOS Terminal SPA 前端
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAP BAS KEEPALIVE 终端</title>
+    <title>SYS_CONSOLE</title>
     <style>
-        /* 纯正 macOS 终端色彩变量 */
+        /* 复古赛博朋克 色彩与字体 */
+        @import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
+        
         :root[data-theme="dark"] { 
-            --bg-body: #1e1e1e; --bg-window: #000000; --bg-header: #2d2d2d;
-            --text-norm: #00ff41; --text-muted: #6b7280; --border-col: #444;
-            --input-bg: #0a0a0a; --toast-bg: #282a36; --toast-text: #50fa7b;
-            --cmd-bg: #1a1a1a; --cmd-col: #8be9fd; --cmd-border: #6272a4; --cmd-hover: #444;
-            --log-info: #00ff41; --log-warn: #f59e0b; --log-err: #ef4444;
-            --shadow-window: 0 20px 50px rgba(0,0,0,0.8), 0 0 0 1px #333;
+            --bg-body: #0d1117; --bg-window: #010409; --bg-header: #161b22;
+            --text-norm: #34d399; /* 荧光绿 */
+            --text-muted: #4b5563; --border-col: #30363d;
+            --input-bg: #000000; --toast-bg: #1f2937; --toast-text: #34d399;
+            --cmd-bg: transparent; --cmd-col: #58a6ff; --cmd-border: #58a6ff; --cmd-hover: #1f6feb;
+            --log-info: #34d399; --log-warn: #fbbf24; --log-err: #f87171;
+            --shadow-window: 0 0 40px rgba(52, 211, 153, 0.1), 0 0 0 1px #30363d;
+            --bloom: 0 0 3px rgba(52, 211, 153, 0.4); /* 荧光光晕 */
         }
         :root[data-theme="light"] { 
-            --bg-body: #e5e7eb; --bg-window: #ffffff; --bg-header: #f3f4f6;
-            --text-norm: #374151; --text-muted: #9ca3af; --border-col: #d1d5db;
-            --input-bg: #f9fafb; --toast-bg: #1f2937; --toast-text: #fff;
-            --cmd-bg: #f3f4f6; --cmd-col: #2563eb; --cmd-border: #93c5fd; --cmd-hover: #e5e7eb;
-            --log-info: #111827; --log-warn: #b45309; --log-err: #dc2626;
-            --shadow-window: 0 20px 50px rgba(0,0,0,0.15), 0 0 0 1px #e5e7eb;
+            --bg-body: #e5e7eb; --bg-window: #f6f8fa; --bg-header: #e1e4e8;
+            --text-norm: #065f46; /* 暗黑绿 */
+            --text-muted: #6e7781; --border-col: #d0d7de;
+            --input-bg: #ffffff; --toast-bg: #24292f; --toast-text: #ffffff;
+            --cmd-bg: transparent; --cmd-col: #0969da; --cmd-border: #0969da; --cmd-hover: #033d8b;
+            --log-info: #065f46; --log-warn: #b45309; --log-err: #cf222e;
+            --shadow-window: 0 15px 30px rgba(0,0,0,0.1), 0 0 0 1px #d0d7de;
+            --bloom: none;
         }
         
-        body { background: var(--bg-body); color: var(--text-norm); font-family: 'Consolas', 'Fira Code', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; display: flex; align-items: center; justify-content: center;}
+        body { background: var(--bg-body); color: var(--text-norm); font-family: 'VT323', 'Consolas', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; text-shadow: var(--bloom); font-size: 17px;}
         
-        /* 视图容器 */
-        #login-view, #app-view { width: 100%; height: 100%; transition: opacity 0.4s ease; position: absolute; top: 0; left: 0; }
-        .hidden { opacity: 0; pointer-events: none; z-index: -1; }
-        .active { opacity: 1; pointer-events: auto; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 4vh 5vw; box-sizing: border-box;}
+        /* CRT 扫描线滤镜 */
+        body::after {
+            content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
+            z-index: 2; background-size: 100% 2px, 3px 100%; pointer-events: none;
+        }
         
-        /* 基础 Mac 窗口样式 */
-        .mac-window { background: var(--bg-window); border-radius: 10px; box-shadow: var(--shadow-window); overflow: hidden; border: 1px solid var(--border-col); display: flex; flex-direction: column; transition: all 0.3s; width: 100%;}
+        /* 绝对中心缩放容器 (修复左上角吸附) */
+        #login-view, #app-view { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+            box-sizing: border-box; padding: 4vh 5vw; z-index: 10;
+        }
+        .hidden { opacity: 0; pointer-events: none; z-index: 1; transform: scale(0.96); }
+        .active { opacity: 1; pointer-events: auto; z-index: 10; transform: scale(1); }
         
-        /* Mac 顶栏 */
-        .mac-header { background: var(--bg-header); height: 28px; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border-col); transition: background 0.3s; user-select: none;}
+        .mac-window { background: var(--bg-window); border-radius: 8px; box-shadow: var(--shadow-window); overflow: hidden; border: 1px solid var(--border-col); display: flex; flex-direction: column; width: 100%; position: relative; z-index: 20;}
+        
+        /* 顶栏 */
+        .mac-header { background: var(--bg-header); height: 26px; display: flex; justify-content: space-between; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border-col); user-select: none;}
         .mac-btns { display: flex; gap: 8px; width: 60px; align-items: center;}
-        .mac-btn { width: 12px; height: 12px; border-radius: 50%; cursor: pointer; transition: filter 0.2s;}
+        .mac-btn { width: 11px; height: 11px; border-radius: 50%; cursor: pointer; transition: filter 0.2s;}
         .mac-btn:hover { filter: brightness(0.8); }
-        .btn-close { background: #ff5f56; } /* 退出 */
-        .btn-min { background: #ffbd2e; }   /* 切主题 */
-        .btn-max { background: #27c93f; cursor: default;} /* 运行灯 */
+        .btn-close { background: #ff5f56; } 
+        .btn-min { background: #ffbd2e; }   
+        .btn-max { background: #27c93f; cursor: default;} 
         
-        /* 呼吸灯动画 */
-        .breathing { animation: blink 2s infinite; }
-        @keyframes blink { 0%, 100% { box-shadow: 0 0 8px #27c93f; opacity: 1; } 50% { box-shadow: none; opacity: 0.5; } }
+        .breathing { animation: blink-btn 2s infinite; }
+        @keyframes blink-btn { 0%, 100% { box-shadow: 0 0 8px #27c93f; opacity: 1; } 50% { box-shadow: none; opacity: 0.5; } }
         
-        .mac-title { font-size: 13px; font-weight: bold; color: var(--text-muted); font-family: -apple-system, BlinkMacSystemFont, sans-serif; letter-spacing: 0.5px; text-align: center; flex: 1;}
-        .mac-spacer { width: 60px; } /* 保持标题居中对齐 */
+        .mac-title { font-size: 15px; font-weight: bold; color: var(--text-muted); letter-spacing: 1px; text-align: center; flex: 1;}
+        .mac-spacer { width: 60px; } 
 
-        /* === 登录界面专属 === */
-        #login-view .mac-window { width: 360px; height: auto; }
-        .login-content { padding: 30px 40px 40px; text-align: center; }
-        .login-content h2 { margin: 0 0 20px; font-size: 18px; color: var(--text-norm); font-weight: normal;}
-        .login-content input { width: 100%; padding: 10px; margin-bottom: 20px; background: var(--input-bg); border: 1px solid var(--border-col); border-radius: 6px; color: var(--text-norm); font-family: 'Consolas', monospace; font-size: 14px; text-align: center; outline: none; box-sizing: border-box; transition: 0.2s;}
+        /* === 登录界面 === */
+        #login-view .mac-window { width: 380px; height: auto; }
+        .login-content { padding: 40px; text-align: center; }
+        .login-content h2 { margin: 0 0 25px; font-size: 24px; color: var(--text-norm); font-weight: normal; letter-spacing: 2px;}
+        .login-content input { width: 100%; padding: 12px; margin-bottom: 25px; background: var(--input-bg); border: 1px solid var(--border-col); border-radius: 4px; color: var(--text-norm); font-family: inherit; font-size: 18px; text-align: center; outline: none; box-sizing: border-box; text-shadow: var(--bloom);}
         .login-content input:focus { border-color: var(--text-norm); }
-        .login-content button { width: 100%; padding: 10px; background: transparent; color: var(--text-norm); border: 1px solid var(--text-norm); border-radius: 6px; font-family: 'Consolas', monospace; font-size: 14px; cursor: pointer; transition: 0.2s; font-weight: bold;}
+        .login-content button { width: 100%; padding: 12px; background: transparent; color: var(--text-norm); border: 1px solid var(--text-norm); border-radius: 4px; font-family: inherit; font-size: 18px; cursor: pointer; transition: 0.2s; text-shadow: var(--bloom);}
         .login-content button:hover { background: var(--text-norm); color: var(--bg-window); }
 
-        /* === 终端主视图专属 === */
-        #app-view.active { justify-content: flex-start; }
+        /* === 终端主界面 === */
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
-        /* 日志输出区 */
-        #terminal { flex: 1; overflow-y: auto; padding: 20px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; font-size: 14px; }
+        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+        
+        /* 冻结区与滚动区 */
+        #boot-sequence { flex-shrink: 0; margin-bottom: 10px; }
+        .separator { color: var(--text-muted); margin: 5px 0 15px 0; user-select: none; }
+        #live-logs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+        
         .log-line { margin: 2px 0; }
         .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } .ERROR { color: var(--log-err); font-weight: bold;}
         
-        /* 可点击命令标签 */
-        .cmd-clickable { color: var(--cmd-col); background: var(--cmd-bg); padding: 1px 6px; border-radius: 4px; cursor: pointer; transition: all 0.2s; border: 1px solid var(--cmd-border); margin: 0 2px; font-weight: bold;}
-        .cmd-clickable:hover { background: var(--cmd-hover); }
+        /* DOS 反显特效 */
+        .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
+        .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
+        .inv-wait { background: var(--log-warn); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
+        .inv-warn { background: var(--log-warn); color: var(--bg-window); padding: 0 5px; text-shadow: none; font-weight: bold;}
         
-        /* 底部极简输入区 */
-        #input-area { background: var(--input-bg); padding: 15px 20px; display: flex; align-items: center; border-top: 1px solid var(--border-col); transition: background 0.3s;}
-        #cmd-prefix { color: #ff79c6; margin-right: 12px; font-weight: bold; font-size: 14px;}
-        #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-norm); font-family: 'Consolas', monospace; font-size: 14px; outline: none; }
-        #cmdInput::placeholder { color: var(--text-muted); }
+        .cmd-clickable { color: var(--cmd-col); padding: 0 4px; cursor: pointer; border: 1px solid var(--cmd-border); margin: 0 2px; transition: 0.1s;}
+        .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
-        /* 滚动条 */
-        ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-col); border-radius: 5px; } ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+        /* 打字机特效行与方块光标 */
+        #typewriter-line { display: flex; align-items: center; min-height: 1.4em;}
+        #typewriter-text { white-space: pre; }
+        .cursor { display: inline-block; width: 10px; height: 1em; background-color: var(--text-norm); margin-left: 2px; animation: cursor-blink 1s step-end infinite; box-shadow: var(--bloom);}
+        @keyframes cursor-blink { 50% { opacity: 0; } }
         
-        /* Toast 气泡 */
-        #toast { position: fixed; bottom: 80px; right: 5vw; background: var(--toast-bg); color: var(--toast-text); padding: 10px 20px; border-radius: 6px; opacity: 0; transition: opacity 0.3s, transform 0.3s; transform: translateY(10px); pointer-events: none; z-index: 1000; box-shadow: 0 4px 15px rgba(0,0,0,0.5); font-size: 13px; font-weight: bold; border: 1px solid var(--border-col);}
-        #toast.show { opacity: 1; transform: translateY(0); }
+        /* 底部输入区 */
+        #input-area { background: var(--input-bg); padding: 15px 20px; display: flex; align-items: center; border-top: 1px solid var(--border-col); }
+        #cmd-prefix { color: var(--cmd-col); margin-right: 12px; font-weight: bold;}
+        #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-norm); font-family: inherit; font-size: 17px; outline: none; text-shadow: var(--bloom);}
+        #cmdInput::placeholder { color: var(--text-muted); text-shadow: none;}
+        
+        ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border-col); border-radius: 0; } ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+        
+        #toast { position: fixed; bottom: 80px; right: 5vw; background: var(--toast-bg); color: var(--toast-text); padding: 8px 16px; border border: 1px solid var(--text-norm); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 1000; box-shadow: var(--shadow-window); font-family: inherit; font-size: 16px;}
+        #toast.show { opacity: 1; }
     </style>
 </head>
 <body>
@@ -545,13 +571,13 @@ HTML_TEMPLATE = """
                     <div class="mac-btn btn-min"></div>
                     <div class="mac-btn btn-max"></div>
                 </div>
-                <div class="mac-title">Login</div>
+                <div class="mac-title">AUTH_GATEWAY</div>
                 <div class="mac-spacer"></div>
             </div>
             <div class="login-content">
-                <h2>SAP BAS KEEPALIVE</h2>
-                <input type="password" id="loginPass" placeholder="请输入密码" autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button onclick="doLogin()">进入终端</button>
+                <h2>SYS_CONSOLE</h2>
+                <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
+                <button onclick="doLogin()">[ ENTER ]</button>
             </div>
         </div>
     </div>
@@ -560,27 +586,32 @@ HTML_TEMPLATE = """
         <div class="mac-window">
             <div class="mac-header">
                 <div class="mac-btns">
-                    <div class="mac-btn btn-close" onclick="doLogout()" title="退出登录"></div>
-                    <div class="mac-btn btn-min" onclick="toggleTheme()" title="切换明暗主题"></div>
-                    <div class="mac-btn btn-max breathing" title="系统运行中"></div>
+                    <div class="mac-btn btn-close" onclick="doLogout()" title="断开连接"></div>
+                    <div class="mac-btn btn-min" onclick="toggleTheme()" title="切换色控"></div>
+                    <div class="mac-btn btn-max breathing" title="内核运行中"></div>
                 </div>
-                <div class="mac-title">SAP BAS KEEPALIVE</div>
+                <div class="mac-title">root@mainframe:~</div>
                 <div class="mac-spacer"></div>
             </div>
             
-            <div id="terminal"></div>
+            <div id="terminal-wrapper">
+                <div id="boot-sequence"></div>
+                <div class="separator">======================================================================</div>
+                <div id="live-logs"></div>
+                <div id="typewriter-line"><span id="typewriter-text"></span><span class="cursor"></span></div>
+            </div>
             
             <div id="input-area">
-                <span id="cmd-prefix">请输入 /sap 查询可用命令:</span>
-                <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="提示：加上数字 ID (如 /start 1) 控制单个账号，不加则控制所有账号。">
+                <span id="cmd-prefix">root@mainframe:~#</span>
+                <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="AWAITING COMMAND (e.g., /sap, /start 1) ...">
             </div>
         </div>
     </div>
 
-    <div id="toast">✅ 已静默填入输入框</div>
+    <div id="toast">[OK] COMMAND COPIED</div>
 
     <script>
-        const terminal = document.getElementById('terminal');
+        const liveLogsDiv = document.getElementById('live-logs');
         const cmdInput = document.getElementById('cmdInput');
         const toast = document.getElementById('toast');
         const loginView = document.getElementById('login-view');
@@ -589,7 +620,12 @@ HTML_TEMPLATE = """
         let autoScroll = true;
         let logInterval = null;
 
-        // === 主题管理 ===
+        // 打字机流控
+        let bootLogsRendered = false;
+        let lastLogCount = 0;
+        let typeQueue = [];
+        let isTyping = false;
+
         function initTheme() {
             let saved = localStorage.getItem('bas_theme');
             if (!saved) {
@@ -606,30 +642,27 @@ HTML_TEMPLATE = """
             document.documentElement.setAttribute('data-theme', next);
         }
 
-        // === 登录管理 ===
         async function doLogin() {
             const pass = document.getElementById('loginPass').value.trim();
             if (!pass) return;
-            
             try {
                 const res = await fetch('/api/verify', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ token: pass })
                 });
-                
                 if (res.status === 200) {
                     localStorage.setItem('bas_token', pass);
                     enterSystem();
-                } else {
-                    alert('Access Denied: Invalid WEB_TOKEN');
-                }
-            } catch(e) { alert('Network Error'); }
+                } else alert('ACCESS DENIED');
+            } catch(e) { alert('NET_ERR'); }
         }
 
         function doLogout() {
             localStorage.removeItem('bas_token');
             clearInterval(logInterval);
+            bootLogsRendered = false;
+            lastLogCount = 0;
+            typeQueue = [];
             appView.className = 'hidden';
             loginView.className = 'active';
             document.getElementById('loginPass').value = '';
@@ -638,22 +671,24 @@ HTML_TEMPLATE = """
         function enterSystem() {
             loginView.className = 'hidden';
             appView.className = 'active';
-            terminal.innerHTML = '';
+            document.getElementById('boot-sequence').innerHTML = '';
+            liveLogsDiv.innerHTML = '';
+            document.getElementById('typewriter-text').textContent = '';
+            
             fetchLogs();
-            logInterval = setInterval(fetchLogs, 3000);
+            logInterval = setInterval(fetchLogs, 1500); // 1.5s高频轮询模拟流
             cmdInput.focus();
         }
 
-        // === 终端核心逻辑 ===
-        terminal.addEventListener('scroll', () => { 
-            autoScroll = terminal.scrollHeight - terminal.scrollTop <= terminal.clientHeight + 10; 
+        liveLogsDiv.addEventListener('scroll', () => { 
+            autoScroll = liveLogsDiv.scrollHeight - liveLogsDiv.scrollTop <= liveLogsDiv.clientHeight + 10; 
         });
 
         window.copyToInput = function(cmdText) {
             cmdInput.value = cmdText + ' ';
             cmdInput.focus();
             navigator.clipboard.writeText(cmdText).catch(err => {});
-            toast.innerText = `已自动填入指令: ${cmdText} 按回车执行`;
+            toast.innerText = `[OK] COPIED: ${cmdText}`;
             toast.className = 'show';
             setTimeout(() => { toast.className = ''; }, 2000);
         }
@@ -661,30 +696,99 @@ HTML_TEMPLATE = """
         async function fetchLogs() {
             const token = localStorage.getItem('bas_token');
             if(!token) return doLogout();
-
             try {
                 const res = await fetch('/api/logs', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ token: token })
                 });
-                
                 if (res.status === 401) return doLogout();
-                
                 const data = await res.json();
-                terminal.innerHTML = data.logs.map(log => {
-                    let cls = 'INFO';
-                    if (log.includes('[WARNING]')) cls = 'WARNING';
-                    if (log.includes('[ERROR]') || log.includes('失败') || log.includes('异常') || log.includes('🚨')) cls = 'ERROR';
-                    
-                    let formattedLog = log.replace(/(\\/(?:status|stop|start|restart|sap)\\b)/g, 
-                        '<span class="cmd-clickable" onclick="copyToInput(\\'$1\\')">$1</span>');
-                        
-                    return `<div class="log-line ${cls}">${formattedLog}</div>`;
-                }).join('');
-                
-                if (autoScroll) terminal.scrollTop = terminal.scrollHeight;
+                processLogStream(data.logs);
             } catch (e) {}
+        }
+
+        // 核心渲染与切割逻辑
+        function processLogStream(logs) {
+            // 寻找引导程序的最后一条边界
+            let splitIndex = logs.findIndex(l => l.includes("Web 终端与鉴权系统已就绪！"));
+            if(splitIndex === -1) splitIndex = -1; // 找不到说明被清理了，全当live
+
+            if (!bootLogsRendered && splitIndex !== -1) {
+                let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
+                document.getElementById('boot-sequence').innerHTML = bootHtml;
+                bootLogsRendered = true;
+                lastLogCount = splitIndex + 1;
+            } else if (!bootLogsRendered) {
+                lastLogCount = 0; // 兜底
+            }
+            
+            if (logs.length < lastLogCount) {
+                // 后端队列溢出重置了
+                lastLogCount = splitIndex !== -1 ? splitIndex + 1 : 0;
+                liveLogsDiv.innerHTML = ''; 
+                return;
+            }
+            
+            let newLogs = logs.slice(lastLogCount);
+            if (newLogs.length > 0) {
+                for(let line of newLogs) typeQueue.push(line);
+                lastLogCount = logs.length;
+                runTypewriter();
+            }
+        }
+
+        // 纯 HTML 渲染转换 (反显特效)
+        function formatLogHTML(log) {
+            let cls = 'INFO';
+            if (log.includes('[WARN]')) cls = 'WARNING';
+            if (log.includes('[FAIL]') || log.includes('[!!FATAL!!]')) cls = 'ERROR';
+            
+            let formatted = log.replace(/\[ OK \]/g, '<span class="inv-ok">[ OK ]</span>')
+                               .replace(/\[FAIL\]/g, '<span class="inv-fail">[FAIL]</span>')
+                               .replace(/\[WAIT\]/g, '<span class="inv-wait">[WAIT]</span>')
+                               .replace(/\[WARN\]/g, '<span class="inv-warn">[WARN]</span>');
+                               
+            formatted = formatted.replace(/(\/(?:status|stop|start|restart|sap)\b)/g, 
+                    '<span class="cmd-clickable" onclick="copyToInput(\'$1\')">$1</span>');
+            return `<div class="log-line ${cls}">${formatted}</div>`;
+        }
+
+        // 打字机动画流
+        function runTypewriter() {
+            if (isTyping || typeQueue.length === 0) return;
+            isTyping = true;
+            
+            let line = typeQueue.shift();
+            let typeSpan = document.getElementById('typewriter-text');
+            
+            // 防堆积：如果突然积压大量日志，直接秒出不再慢吞吞打字
+            if(typeQueue.length > 3) {
+                typeSpan.innerHTML = '';
+                liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(line));
+                while(typeQueue.length > 0) {
+                    liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(typeQueue.shift()));
+                }
+                if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
+                isTyping = false;
+                return;
+            }
+            
+            let index = 0;
+            function typeChar() {
+                if(index < line.length) {
+                    typeSpan.textContent += line.charAt(index);
+                    index++;
+                    if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
+                    setTimeout(typeChar, 8); // 8ms 极速打字
+                } else {
+                    typeSpan.textContent = '';
+                    liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(line));
+                    if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
+                    isTyping = false;
+                    runTypewriter();
+                }
+            }
+            typeChar();
         }
 
         cmdInput.addEventListener('keypress', async function (e) {
@@ -695,17 +799,16 @@ HTML_TEMPLATE = """
                 
                 const fakeLog = document.createElement('div');
                 fakeLog.className = 'log-line INFO';
-                fakeLog.innerText = `[${new Date().toISOString().slice(0,19).replace('T', ' ')}] root@bas:~# ${cmd}`;
-                fakeLog.style.color = '#ff79c6';
-                terminal.appendChild(fakeLog);
-                if (autoScroll) terminal.scrollTop = terminal.scrollHeight;
+                fakeLog.innerHTML = `[${new Date().toISOString().slice(0,19).replace('T', ' ')}] &gt; INPUT RECV: <span class="cmd-clickable">${cmd}</span>`;
+                fakeLog.style.color = 'var(--cmd-col)';
+                liveLogsDiv.appendChild(fakeLog);
+                if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
 
                 cmdInput.value = '';
                 
                 try {
                     const res = await fetch(`/api/command`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ token: token, command: cmd })
                     });
                     if (res.status === 401) doLogout();
@@ -713,11 +816,8 @@ HTML_TEMPLATE = """
             }
         });
 
-        // 初始化
         initTheme();
-        if (localStorage.getItem('bas_token')) {
-            enterSystem();
-        }
+        if (localStorage.getItem('bas_token')) enterSystem();
     </script>
 </body>
 </html>
@@ -753,14 +853,14 @@ def web_command():
     
     cmd_str = data.get("command", "").strip()
     if not cmd_str.startswith("/"):
-        logger.warning(f"[Web终端] 语法错误: {cmd_str} (需以 / 开头)")
+        logger.warning(f"<WEB_UI> 捕获语法异常: {cmd_str} (须以 / 起始)  [WARN]")
         return jsonify({"error": "Invalid command format"}), 400
         
     parts = cmd_str.split()
     command = parts[0].replace("/", "").lower()
     target_id = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else None
     
-    logger.info(f"💻 [Web端下发指令] {cmd_str}")
+    logger.info(f"<WEB_UI> 下发底层指令: {cmd_str}                 [ OK ]")
     
     if command in ['start', 'stop', 'restart']:
         bot_action_runner(command.upper(), target_id)
@@ -769,43 +869,44 @@ def web_command():
     elif command == 'status':
         target_accounts = [acc for acc in ACCOUNTS if acc['id'] == target_id] if target_id else ACCOUNTS
         if target_id and not target_accounts:
-            logger.error(f"❌ [Web终端] 未找到 ID 为 {target_id} 的账号。")
+            logger.error(f"<WEB_UI> 未匹配到标识为 {target_id} 的映射实体      [FAIL]")
             return jsonify({"status": "Not found"})
         
         def _check_web():
-            sys_status = "🔴 繁忙 (排队/执行中)" if system_busy_event.is_set() else "🟢 空闲"
-            logger.info(f"📊 [查询报告] 任务排队/运行状态: {sys_status}")
+            sys_status = "■ 繁忙 (执行列队中)" if system_busy_event.is_set() else "■ 空闲 (锁已释放)"
+            logger.info(f"<SYS_INF> 内存流控锁状态: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                logger.info(f"👤 账号 {acc['id']} ({acc['email']}) -> ☁️ 状态: {status}")
+                logger.info(f"<SYS_INF> 节点 {acc['id']} ({acc['email']}) -> 状态: {status}")
                 
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})
         
     elif command == 'sap':
-        logger.info("--------- 可用命令 ---------")
-        logger.info("🔹 /status   ( 查询 BAS )")
-        logger.info("🔹 /stop     ( 停止 BAS )")
-        logger.info("🔹 /start    ( 启动 BAS )")
-        logger.info("🔹 /restart  ( 重启 BAS )")
+        logger.info("----------- 核心指令集 -----------")
+        logger.info("❖ /status   ( 状态追踪查询 )")
+        logger.info("❖ /stop     ( 冻结算力容器 )")
+        logger.info("❖ /start    ( 唤醒算力容器 )")
+        logger.info("❖ /restart  ( 硬重置数据流 )")
         return jsonify({"status": "Help displayed"})
     
     else:
-        logger.warning(f"⚠️ [Web终端] 未知命令: {cmd_str}")
+        logger.warning(f"<WEB_UI> 丢弃无效的指令序列: {cmd_str}        [WARN]")
         return jsonify({"error": "Unknown command"}), 400
 
 # ==========================================
 # 9. 启动引导区
 # ==========================================
 def start_bot_polling():
-    logger.info(f"✈️ TG Bot 已上线。")
+    logger.info("<SYS_INIT> TG 通讯子系统成功连线。             [ OK ]")
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info(f"🚀 SAP BAS 全自动保活 开始运行! 检测到 {len(ACCOUNTS)} 个有效账号。")
+    logger.info("======================================================================")
+    logger.info(f"<SYS_INIT> SAP BAS 内核启动! 载入 {len(ACCOUNTS)} 个有效映射参数。 [ OK ]")
     
     if not ACCOUNTS:
-        logger.error("[!] 未检测到任何带有 SAP_EMAIL_X 后缀的账号环境变量，程序无法运行！")
+        logger.error("[!!FATAL!!] 核心环境变量缺失，进程异常终止！         [FAIL]")
         sys.exit(1)
         
     scheduler = BackgroundScheduler()
@@ -815,9 +916,9 @@ if __name__ == '__main__':
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO探针:已启用)")
+            logger.info(f"<SCHEDULR> 节点 {acc['id']} 定时器注入 (含NET嗅探)          [ OK ]")
         else:
-            logger.info(f"[+] 账号 {acc['id']} 定时器挂载 (保活:每小时{acc['joba_min']}分 | 重启:每天{acc['jobb_hrs']}时{acc['jobb_min']}分 | ARGO探针:未启用)")
+            logger.info(f"<SCHEDULR> 节点 {acc['id']} 定时器注入 (忽略NET嗅探)        [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 
@@ -826,7 +927,7 @@ if __name__ == '__main__':
     if bot:
         threading.Thread(target=start_bot_polling, daemon=True).start()
 
-    logger.info(f"💻 Web 终端面板已就绪！")
+    logger.info("<SYS_INIT> Web 终端与鉴权系统已就绪！             [ OK ]")
     
     for acc in ACCOUNTS:
         if acc.get('tunnel_url'):

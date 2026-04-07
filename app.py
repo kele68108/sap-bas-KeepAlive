@@ -52,7 +52,7 @@ system_busy_event = threading.Event()
 # 中文大寫序列化引擎
 def get_node_name(acc_id):
     nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
-    return f"SAP_BAS_ {nums[acc_id]}號機" if 1 <= acc_id <= 10 else f"SAP_BAS_ {acc_id}號機"
+    return f"SAP_BAS_【{nums[acc_id]}】號機" if 1 <= acc_id <= 10 else f"SAP_BAS_【{acc_id}】號機"
 
 def get_node_count_str(count):
     nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]

@@ -54,9 +54,14 @@ def get_node_name(acc_id):
     nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
     return f"SAP_BAS_{nums[acc_id]}號機" if 1 <= acc_id <= 10 else f"SAP_BAS_{acc_id}號機"
 
-def get_chinese_num(num):
+def get_node_count_str(count):
     nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
-    return nums[num] if 0 <= num <= 10 else str(num)
+    return nums[count] if 0 <= count <= 10 else str(count)
+
+def format_reboot_times(hrs_str, min_str):
+    if ',' in hrs_str:
+        return "/".join([f"{h}:{min_str}" for h in hrs_str.split(',')])
+    return f"{hrs_str}:{min_str}"
 
 # ==========================================
 # 2. 極簡復古日誌系統
@@ -365,7 +370,7 @@ def tunnel_health_check(account):
     node_name = get_node_name(account['id'])
     
     if 400 <= status_code < 500:
-        logger.info(f" > NET_PING_ {node_name} 邊緣隧道心跳穩定 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [{status_code}] ... [ OK ]")
+        logger.info(f" > NET_PING_ {node_name} 邊緣隧道心跳穩定 [❤ {status_code}] ... [ OK ]")
         if account['fail_count'] > 0 or account['auto_restart_count'] > 0:
             logger.info(f" < NET_RECV_ {node_name} 數據包重組成功，A.T.力場修復 [ OK ]")
             send_tg_msg(f"■ <b>鏈路連接恢復 ({node_name})</b>\n邊緣隧道心跳穩定 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ\n絕密代碼: <tg-spoiler>{account['email']}</tg-spoiler>")
@@ -374,7 +379,7 @@ def tunnel_health_check(account):
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f" > NET_PING_ {node_name} 邊緣隧道發生丟包 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [{status_code}] ({account['fail_count']}/5)... [WARN]")
+        logger.warning(f" > NET_PING_ {node_name} 邊緣隧道發生丟包 [❤ {status_code}] ({account['fail_count']}/5)... [WARN]")
         
         if account['fail_count'] >= 5:
             if account['auto_restart_count'] >= 3:
@@ -483,7 +488,7 @@ HTML_TEMPLATE = """
             --input-bg: #ffffff; --toast-bg: #24292f; --toast-text: #ffffff;
             --cmd-bg: transparent; --cmd-col: #0969da; --cmd-border: #0969da; --cmd-hover: #033d8b;
             --log-info: #065f46; --log-warn: #b45309; --log-err: #cf222e;
-            --shadow-window: 0 15px 30px rgba(0,0,0,0.15), 0 0 0 1px #d0d7de;
+            --shadow-window: 0 15px 30px rgba(0,0,0,0.1), 0 0 0 1px #d0d7de;
             --bloom: none;
         }
         
@@ -528,6 +533,7 @@ HTML_TEMPLATE = """
         .login-content input:focus { border-color: var(--text-norm); }
         .login-content button { width: 100%; padding: 12px; background: transparent; color: var(--text-norm); border: 1px solid var(--text-norm); border-radius: 4px; font-family: inherit; font-size: 18px; cursor: pointer; transition: 0.2s; text-shadow: var(--bloom);}
         .login-content button:hover { background: var(--text-norm); color: var(--bg-window); }
+        .login-content button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
@@ -554,42 +560,17 @@ HTML_TEMPLATE = """
         .ERROR .log-content { animation: glitch-anim 0.3s ease-in-out; color: var(--log-err); font-weight: bold; }
         .ERROR .log-badge { color: var(--log-err); }
         
-        /* 心電圖 (ECG) 波形掃瞄特效 */
-        .ecg-line {
-            display: inline-block;
-            background: linear-gradient(90deg, 
-                var(--text-muted) 0%, 
-                var(--text-norm) 45%, 
-                #ffffff 50%, 
-                var(--text-muted) 55%, 
-                var(--text-muted) 100%);
-            background-size: 200% auto;
-            color: transparent;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: ecg-scan 2s linear infinite;
-            font-weight: bold;
-            filter: drop-shadow(0 0 2px var(--text-norm));
+        /* 心電圖 (ECG) Pulse 熒光特效 */
+        @keyframes heartbeat {
+            0% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+            15% { transform: scale(1.3); text-shadow: 0 0 15px var(--text-norm); }
+            30% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+            45% { transform: scale(1.15); text-shadow: 0 0 10px var(--text-norm); }
+            60% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+            100% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
         }
-        .ecg-line-err {
-            display: inline-block;
-            background: linear-gradient(90deg, 
-                var(--text-muted) 0%, 
-                var(--log-err) 45%, 
-                #ffffff 50%, 
-                var(--text-muted) 55%, 
-                var(--text-muted) 100%);
-            background-size: 200% auto;
-            color: transparent;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: ecg-scan 0.8s linear infinite;
-            font-weight: bold;
-            filter: drop-shadow(0 0 3px var(--log-err));
-        }
-        @keyframes ecg-scan {
-            to { background-position: 200% center; } /* 背景向右滑動，光斑自左向右掃瞄 */
-        }
+        .heartbeat-anim { display: inline-block; animation: heartbeat 1.2s infinite; color: var(--text-norm); font-weight: bold; }
+        .heartbeat-err { display: inline-block; animation: heartbeat 0.8s infinite; color: var(--log-err); text-shadow: 0 0 10px var(--log-err); font-weight: bold; }
 
         .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
         .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
@@ -654,7 +635,10 @@ HTML_TEMPLATE = """
             </div>
             
             <div id="terminal-wrapper">
-                <div id="boot-sequence"></div>
+                <div id="boot-sequence">
+                    <div id="hex-dump-container"></div>
+                    <div id="boot-log-container"></div>
+                </div>
                 <div id="live-logs"></div>
                 <div id="typewriter-line"><span id="typewriter-text"></span><span class="cursor"></span></div>
             </div>
@@ -688,6 +672,7 @@ HTML_TEMPLATE = """
         let typeQueue = [];
         let isTyping = false;
         let hasAlert = false;
+        let currentRunId = 0; // 全局令牌，防止異步污染
 
         function initTheme() {
             try {
@@ -727,8 +712,11 @@ HTML_TEMPLATE = """
             if (!pass) return;
             
             const btn = document.getElementById('loginBtn');
+            if (btn.disabled) return; // 防連擊死鎖
+            
             const origText = btn.innerText;
             btn.innerText = '[ VERIFYING... ]';
+            btn.disabled = true;
             
             try {
                 const res = await fetch('api/verify', {
@@ -751,16 +739,15 @@ HTML_TEMPLATE = """
                 btn.style.color = 'var(--log-warn)';
                 btn.style.borderColor = 'var(--log-warn)';
                 setTimeout(() => { btn.innerText = origText; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+            } finally {
+                btn.disabled = false;
             }
         }
 
         function doLogout() {
+            currentRunId++; // 註銷當前會話，終止舊的打字機與動畫線程
             clearToken();
             clearInterval(logInterval);
-            bootLogsRendered = false;
-            lastLogCount = 0;
-            typeQueue = [];
-            isTyping = false; // [關鍵修復] 釋放打字機線程鎖
             appView.className = 'hidden';
             loginView.className = 'active';
             document.getElementById('loginPass').value = '';
@@ -768,7 +755,7 @@ HTML_TEMPLATE = """
             updateTitle(false);
         }
 
-        async function playHexDump() {
+        async function playHexDump(runId) {
             const hexLines = [
                 "[0x00000000] BOOTSTRAP KERNEL... [ OK ]",
                 "[0x001B4F3A] ALLOCATING NEURAL NETWORK RESOURCES... [ OK ]",
@@ -776,23 +763,36 @@ HTML_TEMPLATE = """
                 "[0x008F11B2] INITIALIZING PLUG SUIT INTERFACE... [ OK ]",
                 "[0x00A1FF23] ESTABLISHING CONNECTION TO MAINFRAME... [ OK ]"
             ];
-            const bootSeq = document.getElementById('boot-sequence');
+            const hexCont = document.getElementById('hex-dump-container');
             for (let line of hexLines) {
-                bootSeq.innerHTML += `<div class="log-line INFO"><div class="log-content">${line}</div></div>`;
+                if (runId !== currentRunId) return; // 進程若被重置，則立即終止動畫
+                hexCont.innerHTML += `<div class="log-line INFO"><div class="log-content">${line}</div></div>`;
                 if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
                 await new Promise(r => setTimeout(r, 120));
             }
-            await new Promise(r => setTimeout(r, 200));
+            if (runId === currentRunId) await new Promise(r => setTimeout(r, 200));
         }
 
         async function enterSystem() {
+            // 全局狀態嚴格初始化（解決卡掉信息的 Bug）
+            currentRunId++;
+            isTyping = false;
+            typeQueue = [];
+            lastLogCount = 0;
+            bootLogsRendered = false;
+            hasAlert = false;
+            
             loginView.className = 'hidden';
             appView.className = 'active';
-            document.getElementById('boot-sequence').innerHTML = '';
+            
+            // 將兩個視窗物理隔離
+            document.getElementById('hex-dump-container').innerHTML = '';
+            document.getElementById('boot-log-container').innerHTML = '';
             liveLogsDiv.innerHTML = '';
             document.getElementById('typewriter-text').textContent = '';
             
-            await playHexDump();
+            await playHexDump(currentRunId);
+            if (currentRunId !== currentRunId) return; // 確保異步安全
             
             fetchLogs();
             logInterval = setInterval(fetchLogs, 1500); 
@@ -832,10 +832,11 @@ HTML_TEMPLATE = """
             let splitIndex = logs.findIndex(l => l.includes("終端面甲激活完成，全系統就緒"));
             if(splitIndex === -1) splitIndex = -1; 
 
+            // 安全渲染後端引導信息，替換 innerHTML += 避免 DOM 互相吞噬
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
                 bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYSTEM_READY ]</div><div class="line"></div></div>';
-                document.getElementById('boot-sequence').innerHTML += bootHtml;
+                document.getElementById('boot-log-container').innerHTML = bootHtml;
                 bootLogsRendered = true;
                 lastLogCount = splitIndex + 1;
             } else if (!bootLogsRendered) {
@@ -877,11 +878,11 @@ HTML_TEMPLATE = """
                  contentHtml = log.replace(badgeRegex, '').trim();
             }
             
-            // 解析心電圖動畫 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [400]
-            if (contentHtml.includes('ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ')) {
-                contentHtml = contentHtml.replace(/ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ \[(\d+)\]/g, (m, p1) => {
-                    let hbClass = parseInt(p1) >= 500 ? 'ecg-line-err' : 'ecg-line';
-                    return `<span class="${hbClass}">ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [${p1}]</span>`;
+            // 解析心電圖動畫 [❤ 400]
+            if (contentHtml.includes('[❤ ')) {
+                contentHtml = contentHtml.replace(/\[❤ (\d+)\]/g, (m, p1) => {
+                    let hbClass = parseInt(p1) >= 500 ? 'heartbeat-err' : 'heartbeat-anim';
+                    return `<span class="${hbClass}">[❤ ${p1}]</span>`;
                 });
             }
             
@@ -910,7 +911,11 @@ HTML_TEMPLATE = """
             }
             
             let index = 0;
+            let runId = currentRunId; // 綁定線程ID
+            
             function typeChar() {
+                if (runId !== currentRunId) return; // 若會話已重置，終止打字機
+                
                 if(index < line.length) {
                     typeSpan.textContent += line.charAt(index);
                     index++;
@@ -1050,7 +1055,7 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載 {get_chinese_num(len(ACCOUNTS))} 個節點參數。 [ OK ]")
+    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載 {get_node_count_str(len(ACCOUNTS))} 個節點參數。 [ OK ]")
     
     if not ACCOUNTS:
         logger.error("[!!FATAL!!] 核心節點參數缺失，系統拋出異常並自我鎖定！ [FAIL]")
@@ -1062,11 +1067,12 @@ if __name__ == '__main__':
         scheduler.add_job(lambda a=acc: async_task_runner("KEEPALIVE", a), trigger='cron', minute=acc['joba_min'], id=f"job_keepalive_{acc['id']}")
         scheduler.add_job(lambda a=acc: async_task_runner("RESTART", a), trigger='cron', hour=acc['jobb_hrs'], minute=acc['jobb_min'], id=f"job_restart_{acc['id']}")
         
+        reboot_str = format_reboot_times(acc['jobb_hrs'], acc['jobb_min'])
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}時{acc['jobb_min']}分 | PROBE:ON ] [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | PROBE:ON ] [ OK ]")
         else:
-            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}時{acc['jobb_min']}分 | PROBE:OFF ] [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | PROBE:OFF ] [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 

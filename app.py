@@ -7,7 +7,7 @@ import urllib.parse
 import logging
 from collections import deque
 import requests
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, render_template_string, request, make_response
 
 from apscheduler.schedulers.background import BackgroundScheduler
 import telebot
@@ -48,6 +48,11 @@ for i in range(1, 11):
 
 task_queue = queue.Queue()
 system_busy_event = threading.Event()
+
+# 中文大寫序列化引擎
+def get_node_name(acc_id):
+    nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
+    return f"SAP_BAS_{nums[acc_id]}號機" if 1 <= acc_id <= 10 else f"SAP_BAS_{acc_id}號機"
 
 # ==========================================
 # 2. 極簡復古日誌系統
@@ -132,11 +137,12 @@ class SAPController:
     @staticmethod
     def execute_lifecycle_action(action_type, account):
         acc_id = account['id']
+        node_name = get_node_name(acc_id)
         region_url = account['region_url']
         email = account['email']
         password = account['password']
         
-        logger.info(f"<EXEC_JOB> 進程提權，執行核心序列: [{action_type}] (節點 {acc_id})")
+        logger.info(f"<EXEC_JOB> 進程提權，執行核心序列: [{action_type}] ({node_name})")
         work_dir = "/tmp"
         
         try:
@@ -147,7 +153,7 @@ class SAPController:
                 api_request = context.request
 
                 try:
-                    logger.info(f" > AUTH_REQ_ 節點 {acc_id} 請求建立安全隧道會話... [WAIT]")
+                    logger.info(f" > AUTH_REQ_ {node_name} 請求建立神經元會話... [WAIT]")
                     page.goto(f"{region_url}/index.html")
                     page.locator("input[name='j_username'], input[type='email']").fill(email)
                     if page.locator("button#logOnFormSubmit, button[type='submit']").is_visible():
@@ -169,13 +175,13 @@ class SAPController:
                     except Exception:
                         pass
                     
-                    logger.info(f" < AUTH_ACK_ 節點 {acc_id} 鑑權通過，已接管遠端 API 總線... [ OK ]")
+                    logger.info(f" < AUTH_ACK_ {node_name} 鑑權通過，已接管遠端 API 總線... [ OK ]")
                     req_headers = {"Accept": "application/json", "X-Requested-With": "XMLHttpRequest"}
                     ws_api_url = f"{region_url}/ws-manager/api/v1/workspace"
                     workspaces = api_request.get(ws_api_url, headers=req_headers).json()
                     
                     if not workspaces:
-                        logger.error(f"[!!FATAL!!] 節點 {acc_id} 掛載區未偵測到有效容器實體 [FAIL]")
+                        logger.error(f"[!!FATAL!!] {node_name} 掛載區未偵測到有效容器實體 [FAIL]")
                         return False
                         
                     ws = workspaces[0]
@@ -185,18 +191,18 @@ class SAPController:
                     status = ws.get("runtime", {}).get("status")
                     
                     if action_type == "STOP" and status == "STOPPED":
-                        msg = f"► <b>指令調度合併 (節點 {acc_id})</b>\n目標容器 [<b>{display_name}</b>] 已處於 <b>掛起態 (STOPPED)</b>，動作跳過。"
+                        msg = f"► <b>指令調度合併 ({node_name})</b>\n目標容器 [<b>{display_name}</b>] 已處於 <b>掛起態 (STOPPED)</b>，動作跳過。"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END_ 節點 {acc_id} 算力已掛起，停止指令合併 [ OK ]")
+                        logger.info(f" < TASK_END_ {node_name} 算力已掛起，停止指令合併 [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
                         return True
                         
                     if action_type == "START" and status == "RUNNING":
-                        msg = f"► <b>指令調度合併 (節點 {acc_id})</b>\n目標容器 [<b>{display_name}</b>] 已處於 <b>運行態 (RUNNING)</b>，動作跳過。\n💡 <i>若邊緣隧道阻斷請使用 /restart 進行硬重置。</i>"
+                        msg = f"► <b>指令調度合併 ({node_name})</b>\n目標容器 [<b>{display_name}</b>] 已處於 <b>運行態 (RUNNING)</b>，動作跳過。\n💡 <i>若邊緣隧道阻斷請使用 /restart 進行硬重置。</i>"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END_ 節點 {acc_id} 狀態已激活，喚醒指令合併 [ OK ]")
+                        logger.info(f" < TASK_END_ {node_name} 狀態已激活，喚醒指令合併 [ OK ]")
                         account['probe_paused'] = False
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -217,21 +223,21 @@ class SAPController:
                             time.sleep(10)
                             curr_ws = next((w for w in api_request.get(ws_api_url, headers=req_headers).json() if w.get("id") == ws_uuid or w.get("config", {}).get("id") == ws_uuid), {})
                             curr_status = curr_ws.get("runtime", {}).get("status", "UNKNOWN")
-                            logger.info(f" > SYS_POLL_ 節點 {acc_id} 狀態輪詢: 期望={target_status}, 當前={curr_status} [WAIT]")
+                            logger.info(f" > SYS_POLL_ {node_name} 狀態輪詢: 期望={target_status}, 當前={curr_status} [WAIT]")
                             if curr_status == target_status:
                                 return True
                         return False
 
                     if action_type in ["RESTART", "STOP"] and status == "RUNNING":
-                        logger.info(f" > SYS_HALT_ 節點 {acc_id} 下發掛起信令，釋放算力資源... [WAIT]")
+                        logger.info(f" > SYS_HALT_ {node_name} 下發掛起信令，釋放算力資源... [WAIT]")
                         if set_status(True, "STOPPED"):
-                            logger.info(f" < TASK_END_ 節點 {acc_id} 資源釋放完成，已安全掛起 [ OK ]")
+                            logger.info(f" < TASK_END_ {node_name} 資源釋放完成，已安全掛起 [ OK ]")
                             status = "STOPPED"
                     
                     if action_type == "STOP":
-                        msg = f"■ <b>算力釋放完畢 (節點 {acc_id})</b>\n目標容器 [<b>{display_name}</b>] 已成功退回掛起狀態。"
+                        msg = f"■ <b>算力釋放完畢 ({node_name})</b>\n目標容器 [<b>{display_name}</b>] 已成功退回掛起狀態。"
                         send_tg_msg(msg)
-                        logger.info(f" < TASK_END_ 節點 {acc_id} 強制休眠指令歸檔 [ OK ]")
+                        logger.info(f" < TASK_END_ {node_name} 強制休眠指令歸檔 [ OK ]")
                         account['probe_paused'] = True
                         account['fail_count'] = 0
                         account['auto_restart_count'] = 0
@@ -239,12 +245,12 @@ class SAPController:
                         
                     if action_type in ["START", "RESTART", "KEEPALIVE"] and status in ["STOPPED", "STARTING", "RUNNING"]:
                         if status == "STOPPED":
-                            logger.info(f" > SYS_BOOT_ 節點 {acc_id} 申請分配底層計算資源... [WAIT]")
+                            logger.info(f" > SYS_BOOT_ {node_name} 申請分配底層計算資源 (等待插入栓深度連接)... [WAIT]")
                             if not set_status(False, "RUNNING"):
-                                logger.error(f"[!!FATAL!!] 節點 {acc_id} 資源分配超時，啟動異常 [FAIL]")
+                                logger.error(f"[!!FATAL!!] {node_name} 資源分配超時，啟動異常 [FAIL]")
                                 return False
                                 
-                        logger.info(f" > UI_PENET_ 節點 {acc_id} 注入無頭探測器探針... [WAIT]")
+                        logger.info(f" > UI_PENET_ {node_name} 注入無頭探測器探針... [WAIT]")
                         page.goto(f"{region_url}/index.html")
                         time.sleep(8)
                         
@@ -252,10 +258,10 @@ class SAPController:
                         ws_link = ws_frame.locator(f"a[href*='{ws_uuid}']").first
                         ws_link.wait_for(state="visible", timeout=20000)
                         ws_link.click(force=True)
-                        logger.info(f" > IDE_LOAD_ 節點 {acc_id} 等待核心 IDE 構件裝載... [WAIT]")
+                        logger.info(f" > IDE_LOAD_ {node_name} 等待核心 IDE 構件裝載... [WAIT]")
                         time.sleep(30)
                         
-                        logger.info(f" > UI_CLEAN_ 節點 {acc_id} 執行模態框靜默消除策略... [WAIT]")
+                        logger.info(f" > UI_CLEAN_ {node_name} 執行模態框靜默消除策略... [WAIT]")
                         for _ in range(3):
                             page.keyboard.press("Escape")
                             time.sleep(0.5)
@@ -263,8 +269,8 @@ class SAPController:
                         screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
                         page.screenshot(path=screenshot_path)
                         if action_type != "KEEPALIVE":
-                            send_tg_photo(screenshot_path, f"■ <b>系統喚醒完成 (節點 {acc_id})</b>\n通知：目標容器 [<b>{display_name}</b>] 算力單元已上線！")
-                        logger.info(f" < TASK_END_ 節點 {acc_id} [{action_type}] 調度流程執行成功 [ OK ]")
+                            send_tg_photo(screenshot_path, f"■ <b>系統喚醒完成 ({node_name})</b>\n通知：目標容器 [<b>{display_name}</b>] 算力單元已上線！")
+                        logger.info(f" < TASK_END_ {node_name} [{action_type}] 調度流程執行成功 [ OK ]")
                         
                         account['probe_paused'] = False
                         account['fail_count'] = 0
@@ -272,11 +278,11 @@ class SAPController:
                         return True
                         
                 except Exception as inner_e:
-                    logger.error(f"[!!FATAL!!] 節點 {acc_id} 運行時發生內核級崩潰 [FAIL]")
+                    logger.error(f"[!!FATAL!!] {node_name} 運行時發生內核級崩潰 [FAIL]")
                     try:
                         error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
                         page.screenshot(path=error_shot)
-                        send_tg_photo(error_shot, f"▲ <b>內核級異常警報 (節點 {acc_id})</b>\n調度指令: {action_type}\n棧追蹤: <code>{str(inner_e)}</code>")
+                        send_tg_photo(error_shot, f"▲ <b>內核級異常警報 ({node_name})</b>\n調度指令: {action_type}\n棧追蹤: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
                         logger.error(f"<SYS_ERR_> 棧追蹤快照導出失敗: {pic_e} [FAIL]")
                     return False
@@ -296,7 +302,7 @@ def enqueue_task(action, target_accounts, source):
         "source": source
     })
     if source == "MANUAL":
-        acc_str = f"節點 {target_accounts[0]['id']}" if len(target_accounts) == 1 else f"全局 {len(target_accounts)} 個節點"
+        acc_str = f"{get_node_name(target_accounts[0]['id'])}" if len(target_accounts) == 1 else f"全局 {len(target_accounts)} 個節點"
         msg = f"► <b>調度任務入隊</b>\n目標: <b>{acc_str}</b>\n指令: <b>{action}</b>..."
         logger.info(f"<SCHEDULR> 手動調度隊列 [{action}] 已覆寫進內存 [ OK ]")
         send_tg_msg(msg)
@@ -352,32 +358,32 @@ def tunnel_health_check(account):
     except Exception:
         status_code = 503
         
-    acc_id = account['id']
+    node_name = get_node_name(account['id'])
     
     if 400 <= status_code < 500:
-        logger.info(f" > NET_PING_ 節點 {acc_id} 邊緣隧道穩定 (HTTP:{status_code}) ... [ OK ]")
+        logger.info(f" > NET_PING_ {node_name} 邊緣隧道心跳穩定 [❤ {status_code}] ... [ OK ]")
         if account['fail_count'] > 0 or account['auto_restart_count'] > 0:
-            logger.info(f" < NET_RECV_ 節點 {acc_id} 數據包重組成功，告警解除 [ OK ]")
-            send_tg_msg(f"■ <b>鏈路連接恢復 (節點 {acc_id})</b>\n邊緣隧道連通性測試通過。")
+            logger.info(f" < NET_RECV_ {node_name} 數據包重組成功，A.T.力場修復 [ OK ]")
+            send_tg_msg(f"■ <b>鏈路連接恢復 ({node_name})</b>\n邊緣隧道心跳穩定 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ\n絕密代碼: <tg-spoiler>{account['email']}</tg-spoiler>")
         account['fail_count'] = 0
         account['auto_restart_count'] = 0
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f" > NET_PING_ 節點 {acc_id} 邊緣隧道發生丟包 ({account['fail_count']}/5)... [WARN]")
+        logger.warning(f" > NET_PING_ {node_name} 邊緣隧道發生丟包 [❤ {status_code}] ({account['fail_count']}/5)... [WARN]")
         
         if account['fail_count'] >= 5:
             if account['auto_restart_count'] >= 3:
-                logger.error(f"[!!FATAL!!] 節點 {acc_id} 連續 3 次硬重啟均超時，探針已掛起 [FAIL]")
-                send_tg_msg(f"▲ <b>節點離線阻斷 (節點 {acc_id})</b>\n連續 3 次硬重置後鏈路徹底斷聯，該節點探針已被系統強制掛起。")
+                logger.error(f"[!!FATAL!!] {node_name} 連續 3 次硬重啟均超時，探針已掛起 [FAIL]")
+                send_tg_msg(f"▲ <b>⚠️ 探針同步率下降至 0% ({node_name})</b>\nA.T.力場（隧道鏈路）已崩潰！該節點已被系統強制掛起。\n絕密代碼: <tg-spoiler>{account['email']}</tg-spoiler>")
                 account['probe_paused'] = True
                 account['fail_count'] = 0
                 return
                 
             account['auto_restart_count'] += 1
             account['fail_count'] = 0
-            logger.error(f"<SYS_CRIT> 節點 {acc_id} 丟包率越界，強制觸發冷啟動序列 ({account['auto_restart_count']}/3)...")
-            send_tg_msg(f"▲ <b>網絡劣化告警 (節點 {acc_id})</b>\n網絡探針連續 5 次超時，拉起強制重置序列 ({account['auto_restart_count']}/3)...")
+            logger.error(f"<SYS_CRIT> {node_name} 丟包率越界，啟動暴走模式，拉起強制重置序列 ({account['auto_restart_count']}/3)...")
+            send_tg_msg(f"▲ <b>🚨 網絡劣化告警 ({node_name})</b>\n連續 5 次心跳失敗，啟動暴走模式(Berserk)，強制拉起系統重置序列 ({account['auto_restart_count']}/3)...")
             enqueue_task("RESTART", [account], "PROBE")
 
 def clean_probe_logs():
@@ -397,7 +403,7 @@ if bot:
     def handle_help(message):
         if not check_tg_auth(message): return
         help_text = (
-            "► <b>SAP BAS KEEPALIVE</b>\n\n"
+            "► <b>NERV_MAINFRAME</b>\n\n"
             "--------- 主機集群控制終端 ---------\n"
             "❖ /status   ( 節點運行狀態追蹤 )\n"
             "❖ /stop     ( 強制釋放計算資源 )\n"
@@ -425,7 +431,8 @@ if bot:
             report = f"► <b>系統全局調度狀態</b>: {sys_status}\n\n"
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                report += f"👤 <b>節點編號 {acc['id']}</b> ({acc['email']})\n"
+                node_name = get_node_name(acc['id'])
+                report += f"👤 <b>節點: {node_name}</b> (<tg-spoiler>{acc['email']}</tg-spoiler>)\n"
                 report += f"■ 容器物理態: <b>{status}</b>\n\n"
             bot.send_message(TG_CHAT_ID, report, parse_mode="HTML")
             
@@ -450,7 +457,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYS_CONSOLE</title>
+    <title>[🟢] SYS_ONLINE</title>
     <style>
         /* 復古賽博朋克 色彩與字體 */
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap');
@@ -522,13 +529,9 @@ HTML_TEMPLATE = """
         
         #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
         
-        /* 強迫症福音：固定頭部預留 10px 寬度配合下方強制出現的 scrollbar */
         #boot-sequence { flex-shrink: 0; padding-right: 10px; }
-        
-        /* 強制保留滾動條軌道 (overflow-y: scroll)，避免 auto 引起的對齊突變 */
         #live-logs { flex: 1; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column; }
         
-        /* Flexbox Log Line */
         .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 2px 0; width: 100%; }
         .log-content { flex: 1; word-break: break-all; }
         .log-badge { flex-shrink: 0; margin-left: 15px; font-family: 'VT323', monospace; font-size: 17px;}
@@ -547,6 +550,18 @@ HTML_TEMPLATE = """
         .ERROR .log-content { animation: glitch-anim 0.3s ease-in-out; color: var(--log-err); font-weight: bold; }
         .ERROR .log-badge { color: var(--log-err); }
         
+        /* 心電圖 (ECG) Pulse 熒光特效 */
+        @keyframes heartbeat {
+            0% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+            15% { transform: scale(1.3); text-shadow: 0 0 15px var(--text-norm); }
+            30% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+            45% { transform: scale(1.15); text-shadow: 0 0 10px var(--text-norm); }
+            60% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+            100% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+        }
+        .heartbeat-anim { display: inline-block; animation: heartbeat 1.2s infinite; color: var(--text-norm); font-weight: bold; }
+        .heartbeat-err { display: inline-block; animation: heartbeat 0.8s infinite; color: var(--log-err); text-shadow: 0 0 10px var(--log-err); font-weight: bold; }
+
         .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
         .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
         .inv-wait { background: var(--log-warn); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
@@ -590,7 +605,7 @@ HTML_TEMPLATE = """
                 <div class="mac-spacer"></div>
             </div>
             <div class="login-content">
-                <h2>SYS_CONSOLE</h2>
+                <h2>NERV_CONSOLE</h2>
                 <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
                 <button id="loginBtn" onclick="doLogin()">[ OVERRIDE ]</button>
             </div>
@@ -616,7 +631,7 @@ HTML_TEMPLATE = """
             </div>
             
             <div id="input-area">
-                <span id="cmd-prefix">ROOT@SAP_BAS_KEEPALIVE_:</span>
+                <span id="cmd-prefix">ROOT@NERV_MAINFRAME_:</span>
                 <input type="text" id="cmdInput" autocomplete="off" spellcheck="false" placeholder="AWAITING COMMAND (e.g., /sap, /start 1) ...">
             </div>
         </div>
@@ -634,25 +649,48 @@ HTML_TEMPLATE = """
         let autoScroll = true;
         let logInterval = null;
 
+        let sessionToken = null;
+        function setToken(val) { sessionToken = val; try { localStorage.setItem('bas_token', val); } catch(e) {} }
+        function getToken() { if (sessionToken) return sessionToken; try { return localStorage.getItem('bas_token'); } catch(e) { return null; } }
+        function clearToken() { sessionToken = null; try { localStorage.removeItem('bas_token'); } catch(e) {} }
+
         let bootLogsRendered = false;
         let lastLogCount = 0;
         let typeQueue = [];
         let isTyping = false;
+        let hasAlert = false;
 
         function initTheme() {
-            let saved = localStorage.getItem('bas_theme');
-            if (!saved) {
-                let h = new Date().getHours();
-                saved = (h >= 6 && h < 18) ? 'light' : 'dark';
-            }
-            document.documentElement.setAttribute('data-theme', saved);
+            try {
+                let saved = localStorage.getItem('bas_theme');
+                if (!saved) {
+                    let h = new Date().getHours();
+                    saved = (h >= 6 && h < 18) ? 'light' : 'dark';
+                }
+                document.documentElement.setAttribute('data-theme', saved);
+            } catch (e) { document.documentElement.setAttribute('data-theme', 'dark'); }
         }
 
         function toggleTheme() {
             let current = document.documentElement.getAttribute('data-theme');
             let next = (current === 'light') ? 'dark' : 'light';
-            localStorage.setItem('bas_theme', next);
+            try { localStorage.setItem('bas_theme', next); } catch (e) {}
             document.documentElement.setAttribute('data-theme', next);
+        }
+
+        function updateTitle(isError) {
+            if (isError && !hasAlert) {
+                hasAlert = true;
+                document.title = '[🚨] 警告: 系統異常!';
+                let link = document.querySelector("link[rel~='icon']");
+                if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+                link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🚨</text></svg>';
+            } else if (!isError && !hasAlert) {
+                document.title = '[🟢] SYS_ONLINE';
+                let link = document.querySelector("link[rel~='icon']");
+                if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
+                link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🟢</text></svg>';
+            }
         }
 
         async function doLogin() {
@@ -664,39 +702,31 @@ HTML_TEMPLATE = """
             btn.innerText = '[ VERIFYING... ]';
             
             try {
-                const res = await fetch('/api/verify', {
+                const res = await fetch('api/verify', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ token: pass })
                 });
                 
                 if (res.status === 200) {
-                    localStorage.setItem('bas_token', pass);
+                    setToken(pass);
                     enterSystem();
                     btn.innerText = origText;
                 } else {
                     btn.innerText = '[ CLEARANCE DENIED ]';
                     btn.style.color = 'var(--log-err)';
                     btn.style.borderColor = 'var(--log-err)';
-                    setTimeout(() => {
-                        btn.innerText = origText;
-                        btn.style.color = '';
-                        btn.style.borderColor = '';
-                    }, 2000);
+                    setTimeout(() => { btn.innerText = origText; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
                 }
             } catch(e) { 
                 btn.innerText = '[ NET_PULSE_ERR ]';
                 btn.style.color = 'var(--log-warn)';
                 btn.style.borderColor = 'var(--log-warn)';
-                setTimeout(() => { 
-                    btn.innerText = origText; 
-                    btn.style.color = '';
-                    btn.style.borderColor = '';
-                }, 2000);
+                setTimeout(() => { btn.innerText = origText; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
             }
         }
 
         function doLogout() {
-            localStorage.removeItem('bas_token');
+            clearToken();
             clearInterval(logInterval);
             bootLogsRendered = false;
             lastLogCount = 0;
@@ -704,14 +734,35 @@ HTML_TEMPLATE = """
             appView.className = 'hidden';
             loginView.className = 'active';
             document.getElementById('loginPass').value = '';
+            hasAlert = false;
+            updateTitle(false);
         }
 
-        function enterSystem() {
+        async function playHexDump() {
+            const hexLines = [
+                "[0x00000000] BOOTSTRAP KERNEL... [ OK ]",
+                "[0x001B4F3A] ALLOCATING NEURAL NETWORK RESOURCES... [ OK ]",
+                "[0x003C8A11] CHECKING A.T. FIELD INTEGRITY... [ OK ]",
+                "[0x008F11B2] INITIALIZING PLUG SUIT INTERFACE... [ OK ]",
+                "[0x00A1FF23] ESTABLISHING CONNECTION TO MAINFRAME... [ OK ]"
+            ];
+            const bootSeq = document.getElementById('boot-sequence');
+            for (let line of hexLines) {
+                bootSeq.innerHTML += `<div class="log-line INFO"><div class="log-content">${line}</div></div>`;
+                if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
+                await new Promise(r => setTimeout(r, 120));
+            }
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        async function enterSystem() {
             loginView.className = 'hidden';
             appView.className = 'active';
             document.getElementById('boot-sequence').innerHTML = '';
             liveLogsDiv.innerHTML = '';
             document.getElementById('typewriter-text').textContent = '';
+            
+            await playHexDump();
             
             fetchLogs();
             logInterval = setInterval(fetchLogs, 1500); 
@@ -734,10 +785,10 @@ HTML_TEMPLATE = """
         }
 
         async function fetchLogs() {
-            const token = localStorage.getItem('bas_token');
+            const token = getToken();
             if(!token) return doLogout();
             try {
-                const res = await fetch('/api/logs', {
+                const res = await fetch('api/logs', {
                     method: 'POST', headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ token: token })
                 });
@@ -753,9 +804,8 @@ HTML_TEMPLATE = """
 
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
-                // 添加 System Ready 徽章分割線 (Hardcore IT Style)
                 bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYSTEM_READY ]</div><div class="line"></div></div>';
-                document.getElementById('boot-sequence').innerHTML = bootHtml;
+                document.getElementById('boot-sequence').innerHTML += bootHtml;
                 bootLogsRendered = true;
                 lastLogCount = splitIndex + 1;
             } else if (!bootLogsRendered) {
@@ -779,13 +829,15 @@ HTML_TEMPLATE = """
         function formatLogHTML(log) {
             let cls = 'INFO';
             if (log.includes('[WARN]')) cls = 'WARNING';
-            if (log.includes('[FAIL]') || log.includes('[!!FATAL!!]')) cls = 'ERROR';
+            if (log.includes('[FAIL]') || log.includes('[!!FATAL!!]')) {
+                cls = 'ERROR';
+                updateTitle(true);
+            }
             
             let badgeHtml = '';
             let contentHtml = log;
             
-            // 提取末尾的狀態徽章用於 Flex 彈性對齊
-            let badgeRegex = /\\[\\s*(OK|FAIL|WAIT|WARN)\\s*\\]/;
+            let badgeRegex = /\[\s*(OK|FAIL|WAIT|WARN)\s*\]/;
             let match = log.match(badgeRegex);
             if (match) {
                  let type = match[1];
@@ -795,8 +847,16 @@ HTML_TEMPLATE = """
                  contentHtml = log.replace(badgeRegex, '').trim();
             }
             
-            contentHtml = contentHtml.replace(/(\\/(?:status|stop|start|restart|sap)\\b)/g, 
-                    '<span class="cmd-clickable" onclick="copyToInput(\\'$1\\')">$1</span>');
+            // 解析心電圖動畫 [❤ 400]
+            if (contentHtml.includes('[❤ ')) {
+                contentHtml = contentHtml.replace(/\[❤ (\d+)\]/g, (m, p1) => {
+                    let hbClass = parseInt(p1) >= 500 ? 'heartbeat-err' : 'heartbeat-anim';
+                    return `<span class="${hbClass}">[❤ ${p1}]</span>`;
+                });
+            }
+            
+            contentHtml = contentHtml.replace(/(\/(?:status|stop|start|restart|sap)\b)/g, 
+                    '<span class="cmd-clickable" onclick="copyToInput(&quot;$1&quot;)">$1</span>');
                     
             return `<div class="log-line ${cls}"><div class="log-content">${contentHtml}</div>${badgeHtml}</div>`;
         }
@@ -840,7 +900,7 @@ HTML_TEMPLATE = """
         cmdInput.addEventListener('keypress', async function (e) {
             if (e.key === 'Enter') {
                 const cmd = cmdInput.value.trim();
-                const token = localStorage.getItem('bas_token');
+                const token = getToken();
                 if (!cmd || !token) return;
                 
                 const fakeLog = document.createElement('div');
@@ -853,7 +913,7 @@ HTML_TEMPLATE = """
                 cmdInput.value = '';
                 
                 try {
-                    const res = await fetch(`/api/command`, {
+                    const res = await fetch(`api/command`, {
                         method: 'POST', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ token: token, command: cmd })
                     });
@@ -862,16 +922,31 @@ HTML_TEMPLATE = """
             }
         });
 
+        // 交互時解除報警
+        cmdInput.addEventListener('focus', () => { 
+            hasAlert = false; 
+            updateTitle(false); 
+        });
+
         initTheme();
-        if (localStorage.getItem('bas_token')) enterSystem();
+        updateTitle(false);
+        if (getToken()) enterSystem();
     </script>
 </body>
 </html>
 """
 
+# ==========================================
+# 8. Flask 後端路由
+# ==========================================
+
 @app.route('/')
 def index():
-    return HTML_TEMPLATE
+    response = make_response(HTML_TEMPLATE)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/verify', methods=['POST'])
 def verify_token():
@@ -919,7 +994,8 @@ def web_command():
             logger.info(f"<SYS_OP> 集群算力容器狀態追蹤: {sys_status}")
             for acc in target_accounts:
                 success, ws_id, status = SAPController.get_workspace_info(acc)
-                logger.info(f"<SYS_OP> 節點 {acc['id']} ({acc['email']}) -> 容器物理態: {status}")
+                node_name = get_node_name(acc['id'])
+                logger.info(f"<SYS_OP> 節點 {node_name} ({acc['email']}) -> 容器物理態: {status}")
                 
         threading.Thread(target=_check_web).start()
         return jsonify({"status": "Checking status"})
@@ -952,14 +1028,15 @@ if __name__ == '__main__':
         
     scheduler = BackgroundScheduler()
     for acc in ACCOUNTS:
+        node_name = get_node_name(acc['id'])
         scheduler.add_job(lambda a=acc: async_task_runner("KEEPALIVE", a), trigger='cron', minute=acc['joba_min'], id=f"job_keepalive_{acc['id']}")
         scheduler.add_job(lambda a=acc: async_task_runner("RESTART", a), trigger='cron', hour=acc['jobb_hrs'], minute=acc['jobb_min'], id=f"job_restart_{acc['id']}")
         
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"<SCHEDULR> 節點 {acc['id']} 守護進程注入 [ KEEP_ALIVE:每小時{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}時{acc['jobb_min']}分 | PROBE:ON ] [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}時{acc['jobb_min']}分 | PROBE:ON ] [ OK ]")
         else:
-            logger.info(f"<SCHEDULR> 節點 {acc['id']} 守護進程注入 [ KEEP_ALIVE:每小時{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}時{acc['jobb_min']}分 | PROBE:OFF ] [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}分 | REBOOT:{acc['jobb_hrs']}時{acc['jobb_min']}分 | PROBE:OFF ] [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 

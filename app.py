@@ -538,13 +538,13 @@ HTML_TEMPLATE = """
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
         /* 改成这样：把 1.3 改大 */
-        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.5; word-wrap: break-word; }
+        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.4; word-wrap: break-word; }
         
         #boot-sequence { flex-shrink: 0; padding-right: 10px; }
         #live-logs { flex: 1; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column; }
        
         /* 改成这样：增加上下外边距 */
-        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 3px 0; width: 100%; }
+        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 2px 0; width: 100%; }
         
         /* 修改點：把 pre-wrap 精準加到了這裡 */
         .log-content { flex: 1; word-break: break-all; white-space: pre-wrap; }
@@ -615,13 +615,13 @@ HTML_TEMPLATE = """
                     <div class="mac-btn btn-min"></div>
                     <div class="mac-btn btn-max"></div>
                 </div>
-                <div class="mac-title">MAINFRAME_AUTH</div>
+                <div class="mac-title">AUTH_GATEWAY</div>
                 <div class="mac-spacer"></div>
             </div>
             <div class="login-content">
-                <h2>NERV_CONSOLE</h2>
+                <h2>SYS_CONSOLE</h2>
                 <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button id="loginBtn" onclick="doLogin()">[ OVERRIDE ]</button>
+                <button id="loginBtn" onclick="doLogin()">[ ENTER ]</button>
             </div>
         </div>
     </div>
@@ -707,7 +707,7 @@ HTML_TEMPLATE = """
                 document.title = '[🟢] SYS_ONLINE';
                 let link = document.querySelector("link[rel~='icon']");
                 if (!link) { link = document.createElement('link'); link.rel = 'icon'; document.head.appendChild(link); }
-                link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🟢</text></svg>';
+                link.href = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">📟</text></svg>';
             }
         }
 
@@ -1054,7 +1054,7 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載 {get_node_count_str(len(ACCOUNTS))} 個節點參數。 [ OK ]")
+    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載{get_node_count_str(len(ACCOUNTS))}個節點參數。 [ OK ]")
     
     if not ACCOUNTS:
         logger.error("[!!FATAL!!] 核心節點參數缺失，系統拋出異常並自我鎖定！ [FAIL]")
@@ -1069,9 +1069,9 @@ if __name__ == '__main__':
         reboot_str = format_reboot_times(acc['jobb_hrs'], acc['jobb_min'])
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | PROBE:ON ] [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 【 KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | ARGO:ON 】 [ OK ]")
         else:
-            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 [ KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | PROBE:OFF ] [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 【 KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | ARGO:OFF 】 [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 

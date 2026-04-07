@@ -524,7 +524,7 @@ HTML_TEMPLATE = """
         @keyframes blink-btn { 0%, 100% { box-shadow: 0 0 8px #27c93f; opacity: 1; } 50% { box-shadow: none; opacity: 0.5; } }
         
         /* 修改后：换成复古像素字体，放大字号，增加字间距 */
-        .mac-title { font-size: 16px; font-weight: bold; color: var(--text-muted); letter-spacing: 2px; text-align: center; flex: 1; font-family: 'VT323', monospace;}
+        .mac-title { font-size: 18px; font-weight: bold; color: var(--text-muted); letter-spacing: 2px; text-align: center; flex: 1; font-family: 'VT323', monospace;}
         .mac-spacer { width: 60px; } 
 
         #login-view .mac-window { width: 380px; height: auto; }

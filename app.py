@@ -468,12 +468,11 @@ HTML_TEMPLATE = """
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>[🟢] SYS_ONLINE</title>
     <style>
-        /* 復古賽博朋克 色彩與字體 */
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap');
         
         :root[data-theme="dark"] { 
             --bg-body: #0d1117; --bg-window: #010409; --bg-header: #161b22;
-            --text-norm: #34d399; /* 熒光綠 */
+            --text-norm: #34d399; 
             --text-muted: #4b5563; --border-col: #30363d;
             --input-bg: #000000; --toast-bg: #1f2937; --toast-text: #34d399;
             --cmd-bg: transparent; --cmd-col: #58a6ff; --cmd-border: #58a6ff; --cmd-hover: #1f6feb;
@@ -483,7 +482,7 @@ HTML_TEMPLATE = """
         }
         :root[data-theme="light"] { 
             --bg-body: #e5e7eb; --bg-window: #f6f8fa; --bg-header: #e1e4e8;
-            --text-norm: #065f46; /* 暗黑綠 */
+            --text-norm: #065f46; 
             --text-muted: #6e7781; --border-col: #d0d7de;
             --input-bg: #ffffff; --toast-bg: #24292f; --toast-text: #ffffff;
             --cmd-bg: transparent; --cmd-col: #0969da; --cmd-border: #0969da; --cmd-hover: #033d8b;
@@ -494,7 +493,6 @@ HTML_TEMPLATE = """
         
         body { background: var(--bg-body); color: var(--text-norm); font-family: 'DotGothic16', 'VT323', monospace; margin: 0; height: 100vh; box-sizing: border-box; overflow: hidden; transition: background 0.3s ease; text-shadow: var(--bloom); font-size: 16px;}
         
-        /* CRT Scanlines */
         body::after {
             content: " "; display: block; position: absolute; top: 0; left: 0; bottom: 0; right: 0;
             background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.03), rgba(0, 255, 0, 0.01), rgba(0, 0, 255, 0.03));
@@ -537,18 +535,24 @@ HTML_TEMPLATE = """
 
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
-        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 20px 20px 0 20px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+        /* 視覺壓縮優化 - 縮減頭部 Padding */
+        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 10px 15px 0 15px; line-height: 1.35; white-space: pre-wrap; word-wrap: break-word; }
         
         #boot-sequence { flex-shrink: 0; padding-right: 10px; }
+        
+        /* 16進制自檢區的獨立極簡樣式 */
+        #hex-dump-container { margin-bottom: 8px; color: var(--text-muted); font-size: 0.9em; opacity: 0.8;}
+        #hex-dump-container .log-line { margin: 0; }
+        
         #live-logs { flex: 1; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column; }
         
-        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 2px 0; width: 100%; }
+        /* 縮減行距 */
+        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 1px 0; width: 100%; }
         .log-content { flex: 1; word-break: break-all; }
         .log-badge { flex-shrink: 0; margin-left: 15px; font-family: 'VT323', monospace; font-size: 17px;}
 
         .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } 
         
-        /* Glitch Animation for ERROR */
         @keyframes glitch-anim {
             0% { transform: translate(0); text-shadow: none; }
             20% { transform: translate(-2px, 1px); text-shadow: 2px 0 rgba(255,0,0,0.8), -2px 0 rgba(0,0,255,0.8); }
@@ -560,7 +564,6 @@ HTML_TEMPLATE = """
         .ERROR .log-content { animation: glitch-anim 0.3s ease-in-out; color: var(--log-err); font-weight: bold; }
         .ERROR .log-badge { color: var(--log-err); }
         
-        /* 心電圖 (ECG) Pulse 熒光特效 */
         @keyframes heartbeat {
             0% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
             15% { transform: scale(1.3); text-shadow: 0 0 15px var(--text-norm); }
@@ -580,17 +583,17 @@ HTML_TEMPLATE = """
         .cmd-clickable { color: var(--cmd-col); padding: 0 4px; cursor: pointer; border: 1px solid var(--cmd-border); margin: 0 2px; transition: 0.1s;}
         .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
-        /* System Ready Divider */
-        .sys-divider { display: flex; align-items: center; width: 100%; margin: 15px 0 10px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
+        /* 壓縮分割線空間 */
+        .sys-divider { display: flex; align-items: center; width: 100%; margin: 6px 0 8px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
         .sys-divider .line { flex: 1; height: 1px; background-color: var(--cmd-col); box-shadow: var(--bloom); }
         .sys-divider .badge { padding: 0 15px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 2px;}
 
-        #typewriter-line { display: flex; align-items: center; min-height: 1.5em; width: 100%; padding-right: 10px;}
+        #typewriter-line { display: flex; align-items: center; min-height: 1.35em; width: 100%; padding-right: 10px;}
         #typewriter-text { white-space: pre-wrap; word-break: break-all; flex: 1;}
         .cursor { display: inline-block; width: 8px; height: 1em; background-color: var(--text-norm); margin-left: 2px; animation: cursor-blink 1s step-end infinite; box-shadow: var(--bloom);}
         @keyframes cursor-blink { 50% { opacity: 0; } }
         
-        #input-area { background: var(--input-bg); padding: 15px 20px; display: flex; align-items: center; border-top: 1px solid var(--border-col); }
+        #input-area { background: var(--input-bg); padding: 12px 15px; display: flex; align-items: center; border-top: 1px solid var(--border-col); }
         #cmd-prefix { color: var(--cmd-col); margin-right: 12px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px;}
         #cmdInput { flex: 1; background: transparent; border: none; color: var(--text-norm); font-family: inherit; font-size: 17px; outline: none; text-shadow: var(--bloom);}
         #cmdInput::placeholder { color: var(--text-muted); text-shadow: none;}
@@ -672,7 +675,7 @@ HTML_TEMPLATE = """
         let typeQueue = [];
         let isTyping = false;
         let hasAlert = false;
-        let currentRunId = 0; // 全局令牌，防止異步污染
+        let currentRunId = 0; 
 
         function initTheme() {
             try {
@@ -712,7 +715,7 @@ HTML_TEMPLATE = """
             if (!pass) return;
             
             const btn = document.getElementById('loginBtn');
-            if (btn.disabled) return; // 防連擊死鎖
+            if (btn.disabled) return; 
             
             const origText = btn.innerText;
             btn.innerText = '[ VERIFYING... ]';
@@ -745,7 +748,7 @@ HTML_TEMPLATE = """
         }
 
         function doLogout() {
-            currentRunId++; // 註銷當前會話，終止舊的打字機與動畫線程
+            currentRunId++; 
             clearToken();
             clearInterval(logInterval);
             appView.className = 'hidden';
@@ -765,16 +768,15 @@ HTML_TEMPLATE = """
             ];
             const hexCont = document.getElementById('hex-dump-container');
             for (let line of hexLines) {
-                if (runId !== currentRunId) return; // 進程若被重置，則立即終止動畫
+                if (runId !== currentRunId) return; 
                 hexCont.innerHTML += `<div class="log-line INFO"><div class="log-content">${line}</div></div>`;
                 if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
-                await new Promise(r => setTimeout(r, 120));
+                await new Promise(r => setTimeout(r, 100));
             }
-            if (runId === currentRunId) await new Promise(r => setTimeout(r, 200));
+            if (runId === currentRunId) await new Promise(r => setTimeout(r, 150));
         }
 
         async function enterSystem() {
-            // 全局狀態嚴格初始化（解決卡掉信息的 Bug）
             currentRunId++;
             isTyping = false;
             typeQueue = [];
@@ -785,14 +787,13 @@ HTML_TEMPLATE = """
             loginView.className = 'hidden';
             appView.className = 'active';
             
-            // 將兩個視窗物理隔離
             document.getElementById('hex-dump-container').innerHTML = '';
             document.getElementById('boot-log-container').innerHTML = '';
             liveLogsDiv.innerHTML = '';
             document.getElementById('typewriter-text').textContent = '';
             
             await playHexDump(currentRunId);
-            if (currentRunId !== currentRunId) return; // 確保異步安全
+            if (currentRunId !== currentRunId) return; 
             
             fetchLogs();
             logInterval = setInterval(fetchLogs, 1500); 
@@ -832,7 +833,6 @@ HTML_TEMPLATE = """
             let splitIndex = logs.findIndex(l => l.includes("終端面甲激活完成，全系統就緒"));
             if(splitIndex === -1) splitIndex = -1; 
 
-            // 安全渲染後端引導信息，替換 innerHTML += 避免 DOM 互相吞噬
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
                 bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYSTEM_READY ]</div><div class="line"></div></div>';
@@ -858,6 +858,8 @@ HTML_TEMPLATE = """
         }
 
         function formatLogHTML(log) {
+            if (!log || log.trim() === '') return ''; // 強力消除幽靈空行
+            
             let cls = 'INFO';
             if (log.includes('[WARN]')) cls = 'WARNING';
             if (log.includes('[FAIL]') || log.includes('[!!FATAL!!]')) {
@@ -878,7 +880,6 @@ HTML_TEMPLATE = """
                  contentHtml = log.replace(badgeRegex, '').trim();
             }
             
-            // 解析心電圖動畫 [❤ 400]
             if (contentHtml.includes('[❤ ')) {
                 contentHtml = contentHtml.replace(/\[❤ (\d+)\]/g, (m, p1) => {
                     let hbClass = parseInt(p1) >= 500 ? 'heartbeat-err' : 'heartbeat-anim';
@@ -897,13 +898,23 @@ HTML_TEMPLATE = """
             isTyping = true;
             
             let line = typeQueue.shift();
+            // 過濾可能的空隊列對象
+            if (!line || !line.trim()) {
+                isTyping = false;
+                runTypewriter();
+                return;
+            }
+            
             let typeSpan = document.getElementById('typewriter-text');
             
             if(typeQueue.length > 3) {
                 typeSpan.innerHTML = '';
                 liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(line));
                 while(typeQueue.length > 0) {
-                    liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(typeQueue.shift()));
+                    let fastLine = typeQueue.shift();
+                    if (fastLine && fastLine.trim()) {
+                        liveLogsDiv.insertAdjacentHTML('beforeend', formatLogHTML(fastLine));
+                    }
                 }
                 if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
                 isTyping = false;
@@ -911,10 +922,10 @@ HTML_TEMPLATE = """
             }
             
             let index = 0;
-            let runId = currentRunId; // 綁定線程ID
+            let runId = currentRunId; 
             
             function typeChar() {
-                if (runId !== currentRunId) return; // 若會話已重置，終止打字機
+                if (runId !== currentRunId) return; 
                 
                 if(index < line.length) {
                     typeSpan.textContent += line.charAt(index);
@@ -957,7 +968,6 @@ HTML_TEMPLATE = """
             }
         });
 
-        // 交互時解除報警
         cmdInput.addEventListener('focus', () => { 
             hasAlert = false; 
             updateTitle(false); 
@@ -970,10 +980,6 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
-
-# ==========================================
-# 8. Flask 後端路由
-# ==========================================
 
 @app.route('/')
 def index():

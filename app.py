@@ -523,8 +523,8 @@ HTML_TEMPLATE = """
         .breathing { animation: blink-btn 2s infinite; }
         @keyframes blink-btn { 0%, 100% { box-shadow: 0 0 8px #27c93f; opacity: 1; } 50% { box-shadow: none; opacity: 0.5; } }
         
-        /* 徹底賽博改造：移除蘋果字體，強制繼承像素字體 */
-        .mac-title { font-size: 15px; font-weight: bold; color: var(--text-muted); letter-spacing: 2px; text-align: center; flex: 1; font-family: 'DotGothic16', 'VT323', monospace; text-shadow: var(--bloom);}
+        /* 修改后：换成复古像素字体，放大字号，增加字间距 */
+        .mac-title { font-size: 16px; font-weight: bold; color: var(--text-muted); letter-spacing: 2px; text-align: center; flex: 1; font-family: 'VT323', monospace;}
         .mac-spacer { width: 60px; } 
 
         #login-view .mac-window { width: 380px; height: auto; }
@@ -538,18 +538,22 @@ HTML_TEMPLATE = """
 
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
+        /* 改成这样：把 1.3 改大 */
         #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.4; word-wrap: break-word; }
         
         #boot-sequence { flex-shrink: 0; padding-right: 10px; }
         #live-logs { flex: 1; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column; }
        
+        /* 改成这样：增加上下外边距 */
         .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 2px 0; width: 100%; }
         
+        /* 修改點：把 pre-wrap 精準加到了這裡 */
         .log-content { flex: 1; word-break: break-all; white-space: pre-wrap; }
         .log-badge { flex-shrink: 0; margin-left: 15px; font-family: 'VT323', monospace; font-size: 17px;}
 
         .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } 
         
+        /* Glitch Animation for ERROR */
         @keyframes glitch-anim {
             0% { transform: translate(0); text-shadow: none; }
             20% { transform: translate(-2px, 1px); text-shadow: 2px 0 rgba(255,0,0,0.8), -2px 0 rgba(0,0,255,0.8); }
@@ -561,6 +565,7 @@ HTML_TEMPLATE = """
         .ERROR .log-content { animation: glitch-anim 0.3s ease-in-out; color: var(--log-err); font-weight: bold; }
         .ERROR .log-badge { color: var(--log-err); }
         
+        /* 心電圖 (ECG) Pulse 熒光特效 */
         @keyframes heartbeat {
             0% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
             15% { transform: scale(1.3); text-shadow: 0 0 15px var(--text-norm); }
@@ -580,6 +585,7 @@ HTML_TEMPLATE = """
         .cmd-clickable { color: var(--cmd-col); padding: 0 4px; cursor: pointer; border: 1px solid var(--cmd-border); margin: 0 2px; transition: 0.1s;}
         .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
+        /* 修改點：縮減了 SYSTEM_READY 上下間距 */
         .sys-divider { display: flex; align-items: center; width: 100%; margin: 8px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
         .sys-divider .line { flex: 1; height: 1px; background-color: var(--cmd-col); box-shadow: var(--bloom); }
         .sys-divider .badge { padding: 0 15px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 2px;}
@@ -616,7 +622,7 @@ HTML_TEMPLATE = """
             <div class="login-content">
                 <h2>SYS_CONSOLE</h2>
                 <input type="password" id="loginPass" placeholder="INPUT ROOT TOKEN..." autocomplete="off" onkeypress="if(event.key==='Enter') doLogin()">
-                <button id="loginBtn" onclick="doLogin()">[ OVERRIDE ]</button>
+                <button id="loginBtn" onclick="doLogin()">[ ENTER ]</button>
             </div>
         </div>
     </div>
@@ -881,7 +887,7 @@ HTML_TEMPLATE = """
                 });
             }
             
-            contentHtml = contentHtml.replace(/(\/(?:status|stop|start|restart|sap)\b)/g, 
+            contentHtml = contentHtml.replace(/(\/(?:status|stop|start|restart|sap)\\b)/g, 
                     '<span class="cmd-clickable" onclick="copyToInput(&quot;$1&quot;)">$1</span>');
                     
             return `<div class="log-line ${cls}"><div class="log-content">${contentHtml}</div>${badgeHtml}</div>`;

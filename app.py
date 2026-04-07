@@ -391,7 +391,7 @@ def tunnel_health_check(account):
                 
             account['auto_restart_count'] += 1
             account['fail_count'] = 0
-            logger.error(f"<SYS_CRIT> {node_name} 丟包率越界，啟動暴走模式，拉起強制重置序列 ({account['auto_restart_count']}/3)...")
+            logger.error(f"<SYS_CRIT> {node_name} 丟包率越界，啟暴走模式，拉起強制重置序列 ({account['auto_restart_count']}/3)...")
             send_tg_msg(f"▲ <b>🚨 網絡劣化告警 ({node_name})</b>\n連續 5 次心跳失敗，啟動暴走模式(Berserk)，強制拉起系統重置序列 ({account['auto_restart_count']}/3)...")
             enqueue_task("RESTART", [account], "PROBE")
 
@@ -537,15 +537,17 @@ HTML_TEMPLATE = """
 
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
-        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.2; white-space: pre-wrap; word-wrap: break-word; }
+        /* 修改點：去除了 white-space: pre-wrap; 壓縮了行高和頂層 padding */
+        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.3; word-wrap: break-word; }
         
         #boot-sequence { flex-shrink: 0; padding-right: 10px; }
-        #hex-dump-container { margin-bottom: 5px; }
-        #boot-log-container { margin-top: 5px; }
         #live-logs { flex: 1; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column; }
-
+        
+        /* 修改點：去除了默認的行與行之間的 margin */
         .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 0; width: 100%; }
-        .log-content { flex: 1; word-break: break-all; }
+        
+        /* 修改點：把 pre-wrap 精準加到了這裡 */
+        .log-content { flex: 1; word-break: break-all; white-space: pre-wrap; }
         .log-badge { flex-shrink: 0; margin-left: 15px; font-family: 'VT323', monospace; font-size: 17px;}
 
         .INFO { color: var(--log-info); } .WARNING { color: var(--log-warn); } 
@@ -582,7 +584,7 @@ HTML_TEMPLATE = """
         .cmd-clickable { color: var(--cmd-col); padding: 0 4px; cursor: pointer; border: 1px solid var(--cmd-border); margin: 0 2px; transition: 0.1s;}
         .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
-        /* System Ready Divider */
+        /* 修改點：縮減了 SYSTEM_READY 上下間距 */
         .sys-divider { display: flex; align-items: center; width: 100%; margin: 4px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
         .sys-divider .line { flex: 1; height: 1px; background-color: var(--cmd-col); box-shadow: var(--bloom); }
         .sys-divider .badge { padding: 0 15px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 2px;}
@@ -674,7 +676,7 @@ HTML_TEMPLATE = """
         let typeQueue = [];
         let isTyping = false;
         let hasAlert = false;
-        let currentRunId = 0; // 全局令牌，防止異步污染
+        let currentRunId = 0; 
 
         function initTheme() {
             try {
@@ -714,7 +716,7 @@ HTML_TEMPLATE = """
             if (!pass) return;
             
             const btn = document.getElementById('loginBtn');
-            if (btn.disabled) return; // 防連擊死鎖
+            if (btn.disabled) return; 
             
             const origText = btn.innerText;
             btn.innerText = '[ VERIFYING... ]';
@@ -747,7 +749,7 @@ HTML_TEMPLATE = """
         }
 
         function doLogout() {
-            currentRunId++; // 註銷當前會話，終止舊的打字機與動畫線程
+            currentRunId++; 
             clearToken();
             clearInterval(logInterval);
             appView.className = 'hidden';
@@ -767,7 +769,7 @@ HTML_TEMPLATE = """
             ];
             const hexCont = document.getElementById('hex-dump-container');
             for (let line of hexLines) {
-                if (runId !== currentRunId) return; // 進程若被重置，則立即終止動畫
+                if (runId !== currentRunId) return; 
                 hexCont.innerHTML += `<div class="log-line INFO"><div class="log-content">${line}</div></div>`;
                 if (autoScroll) liveLogsDiv.scrollTop = liveLogsDiv.scrollHeight;
                 await new Promise(r => setTimeout(r, 120));
@@ -776,7 +778,6 @@ HTML_TEMPLATE = """
         }
 
         async function enterSystem() {
-            // 全局狀態嚴格初始化（解決卡掉信息的 Bug）
             currentRunId++;
             isTyping = false;
             typeQueue = [];
@@ -787,14 +788,13 @@ HTML_TEMPLATE = """
             loginView.className = 'hidden';
             appView.className = 'active';
             
-            // 將兩個視窗物理隔離
             document.getElementById('hex-dump-container').innerHTML = '';
             document.getElementById('boot-log-container').innerHTML = '';
             liveLogsDiv.innerHTML = '';
             document.getElementById('typewriter-text').textContent = '';
             
             await playHexDump(currentRunId);
-            if (currentRunId !== currentRunId) return; // 確保異步安全
+            if (currentRunId !== currentRunId) return; 
             
             fetchLogs();
             logInterval = setInterval(fetchLogs, 1500); 
@@ -834,7 +834,6 @@ HTML_TEMPLATE = """
             let splitIndex = logs.findIndex(l => l.includes("終端面甲激活完成，全系統就緒"));
             if(splitIndex === -1) splitIndex = -1; 
 
-            // 安全渲染後端引導信息，替換 innerHTML += 避免 DOM 互相吞噬
             if (!bootLogsRendered && splitIndex !== -1) {
                 let bootHtml = logs.slice(0, splitIndex + 1).map(formatLogHTML).join('');
                 bootHtml += '<div class="sys-divider"><div class="line"></div><div class="badge">[ SYSTEM_READY ]</div><div class="line"></div></div>';
@@ -880,7 +879,6 @@ HTML_TEMPLATE = """
                  contentHtml = log.replace(badgeRegex, '').trim();
             }
             
-            // 解析心電圖動畫 [❤ 400]
             if (contentHtml.includes('[❤ ')) {
                 contentHtml = contentHtml.replace(/\[❤ (\d+)\]/g, (m, p1) => {
                     let hbClass = parseInt(p1) >= 500 ? 'heartbeat-err' : 'heartbeat-anim';
@@ -913,10 +911,10 @@ HTML_TEMPLATE = """
             }
             
             let index = 0;
-            let runId = currentRunId; // 綁定線程ID
+            let runId = currentRunId; 
             
             function typeChar() {
-                if (runId !== currentRunId) return; // 若會話已重置，終止打字機
+                if (runId !== currentRunId) return; 
                 
                 if(index < line.length) {
                     typeSpan.textContent += line.charAt(index);
@@ -959,7 +957,6 @@ HTML_TEMPLATE = """
             }
         });
 
-        // 交互時解除報警
         cmdInput.addEventListener('focus', () => { 
             hasAlert = false; 
             updateTitle(false); 

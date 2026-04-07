@@ -537,14 +537,14 @@ HTML_TEMPLATE = """
 
         #app-view .mac-window { flex: 1; max-width: 1400px; }
         
-        /* 修改點：去除了 white-space: pre-wrap; 壓縮了行高和頂層 padding */
-        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.3; word-wrap: break-word; }
+        /* 改成这样：把 1.3 改大 */
+        #terminal-wrapper { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 5px 20px 0 20px; line-height: 1.5; word-wrap: break-word; }
         
         #boot-sequence { flex-shrink: 0; padding-right: 10px; }
         #live-logs { flex: 1; overflow-y: scroll; overflow-x: hidden; display: flex; flex-direction: column; }
-        
-        /* 修改點：去除了默認的行與行之間的 margin */
-        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 0; width: 100%; }
+       
+        /* 改成这样：增加上下外边距 */
+        .log-line { display: flex; justify-content: space-between; align-items: flex-start; margin: 3px 0; width: 100%; }
         
         /* 修改點：把 pre-wrap 精準加到了這裡 */
         .log-content { flex: 1; word-break: break-all; white-space: pre-wrap; }
@@ -585,7 +585,7 @@ HTML_TEMPLATE = """
         .cmd-clickable:hover { background: var(--cmd-col); color: var(--bg-window); text-shadow: none;}
         
         /* 修改點：縮減了 SYSTEM_READY 上下間距 */
-        .sys-divider { display: flex; align-items: center; width: 100%; margin: 4px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
+        .sys-divider { display: flex; align-items: center; width: 100%; margin: 8px 0; color: var(--cmd-col); text-shadow: var(--bloom); opacity: 0.8;}
         .sys-divider .line { flex: 1; height: 1px; background-color: var(--cmd-col); box-shadow: var(--bloom); }
         .sys-divider .badge { padding: 0 15px; font-weight: bold; font-family: 'VT323', monospace; font-size: 18px; letter-spacing: 2px;}
 

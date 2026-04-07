@@ -466,7 +466,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>[🟢] SYS_ONLINE</title>
+    <title>SYS_ONLINE</title>
     <style>
         /* 復古賽博朋克 色彩與字體 */
         @import url('https://fonts.googleapis.com/css2?family=DotGothic16&family=VT323&display=swap');
@@ -1054,7 +1054,7 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載{get_node_count_str(len(ACCOUNTS))}個節點參數。 [ OK ]")
+    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載【{get_node_count_str(len(ACCOUNTS))}】個節點參數。 [ OK ]")
     
     if not ACCOUNTS:
         logger.error("[!!FATAL!!] 核心節點參數缺失，系統拋出異常並自我鎖定！ [FAIL]")
@@ -1069,9 +1069,9 @@ if __name__ == '__main__':
         reboot_str = format_reboot_times(acc['jobb_hrs'], acc['jobb_min'])
         if acc.get('tunnel_url'):
             scheduler.add_job(lambda a=acc: tunnel_health_check(a), trigger='interval', minutes=1, id=f"job_health_{acc['id']}")
-            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 【 KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | ARGO:ON 】 [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入【KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | ARGO:ON】 [ OK ]")
         else:
-            logger.info(f"<SCHEDULR> {node_name} 守護進程注入 【 KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | ARGO:OFF 】 [ OK ]")
+            logger.info(f"<SCHEDULR> {node_name} 守護進程注入【KEEP_ALIVE:{acc['joba_min']}M/H | REBOOT:{reboot_str} | ARGO:OFF】 [ OK ]")
 
     scheduler.add_job(clean_probe_logs, trigger='interval', hours=1, id='job_clean_logs')
 

@@ -54,6 +54,10 @@ def get_node_name(acc_id):
     nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
     return f"SAP_BAS_{nums[acc_id]}號機" if 1 <= acc_id <= 10 else f"SAP_BAS_{acc_id}號機"
 
+def get_chinese_num(num):
+    nums = ["零", "壹", "貳", "叁", "肆", "伍", "陸", "柒", "捌", "玖", "拾"]
+    return nums[num] if 0 <= num <= 10 else str(num)
+
 # ==========================================
 # 2. 極簡復古日誌系統
 # ==========================================
@@ -361,7 +365,7 @@ def tunnel_health_check(account):
     node_name = get_node_name(account['id'])
     
     if 400 <= status_code < 500:
-        logger.info(f" > NET_PING_ {node_name} 邊緣隧道心跳穩定 [❤ {status_code}] ... [ OK ]")
+        logger.info(f" > NET_PING_ {node_name} 邊緣隧道心跳穩定 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [{status_code}] ... [ OK ]")
         if account['fail_count'] > 0 or account['auto_restart_count'] > 0:
             logger.info(f" < NET_RECV_ {node_name} 數據包重組成功，A.T.力場修復 [ OK ]")
             send_tg_msg(f"■ <b>鏈路連接恢復 ({node_name})</b>\n邊緣隧道心跳穩定 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ\n絕密代碼: <tg-spoiler>{account['email']}</tg-spoiler>")
@@ -370,7 +374,7 @@ def tunnel_health_check(account):
         
     elif 500 <= status_code < 600:
         account['fail_count'] += 1
-        logger.warning(f" > NET_PING_ {node_name} 邊緣隧道發生丟包 [❤ {status_code}] ({account['fail_count']}/5)... [WARN]")
+        logger.warning(f" > NET_PING_ {node_name} 邊緣隧道發生丟包 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [{status_code}] ({account['fail_count']}/5)... [WARN]")
         
         if account['fail_count'] >= 5:
             if account['auto_restart_count'] >= 3:
@@ -479,7 +483,7 @@ HTML_TEMPLATE = """
             --input-bg: #ffffff; --toast-bg: #24292f; --toast-text: #ffffff;
             --cmd-bg: transparent; --cmd-col: #0969da; --cmd-border: #0969da; --cmd-hover: #033d8b;
             --log-info: #065f46; --log-warn: #b45309; --log-err: #cf222e;
-            --shadow-window: 0 15px 30px rgba(0,0,0,0.1), 0 0 0 1px #d0d7de;
+            --shadow-window: 0 15px 30px rgba(0,0,0,0.15), 0 0 0 1px #d0d7de;
             --bloom: none;
         }
         
@@ -550,17 +554,42 @@ HTML_TEMPLATE = """
         .ERROR .log-content { animation: glitch-anim 0.3s ease-in-out; color: var(--log-err); font-weight: bold; }
         .ERROR .log-badge { color: var(--log-err); }
         
-        /* 心電圖 (ECG) Pulse 熒光特效 */
-        @keyframes heartbeat {
-            0% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
-            15% { transform: scale(1.3); text-shadow: 0 0 15px var(--text-norm); }
-            30% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
-            45% { transform: scale(1.15); text-shadow: 0 0 10px var(--text-norm); }
-            60% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
-            100% { transform: scale(1); text-shadow: 0 0 5px var(--text-norm); }
+        /* 心電圖 (ECG) 波形掃瞄特效 */
+        .ecg-line {
+            display: inline-block;
+            background: linear-gradient(90deg, 
+                var(--text-muted) 0%, 
+                var(--text-norm) 45%, 
+                #ffffff 50%, 
+                var(--text-muted) 55%, 
+                var(--text-muted) 100%);
+            background-size: 200% auto;
+            color: transparent;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: ecg-scan 2s linear infinite;
+            font-weight: bold;
+            filter: drop-shadow(0 0 2px var(--text-norm));
         }
-        .heartbeat-anim { display: inline-block; animation: heartbeat 1.2s infinite; color: var(--text-norm); font-weight: bold; }
-        .heartbeat-err { display: inline-block; animation: heartbeat 0.8s infinite; color: var(--log-err); text-shadow: 0 0 10px var(--log-err); font-weight: bold; }
+        .ecg-line-err {
+            display: inline-block;
+            background: linear-gradient(90deg, 
+                var(--text-muted) 0%, 
+                var(--log-err) 45%, 
+                #ffffff 50%, 
+                var(--text-muted) 55%, 
+                var(--text-muted) 100%);
+            background-size: 200% auto;
+            color: transparent;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: ecg-scan 0.8s linear infinite;
+            font-weight: bold;
+            filter: drop-shadow(0 0 3px var(--log-err));
+        }
+        @keyframes ecg-scan {
+            to { background-position: 200% center; } /* 背景向右滑動，光斑自左向右掃瞄 */
+        }
 
         .inv-ok { background: var(--log-info); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
         .inv-fail { background: var(--log-err); color: var(--bg-window); padding: 0 4px; text-shadow: none; font-weight: bold;}
@@ -731,6 +760,7 @@ HTML_TEMPLATE = """
             bootLogsRendered = false;
             lastLogCount = 0;
             typeQueue = [];
+            isTyping = false; // [關鍵修復] 釋放打字機線程鎖
             appView.className = 'hidden';
             loginView.className = 'active';
             document.getElementById('loginPass').value = '';
@@ -847,11 +877,11 @@ HTML_TEMPLATE = """
                  contentHtml = log.replace(badgeRegex, '').trim();
             }
             
-            // 解析心電圖動畫 [❤ 400]
-            if (contentHtml.includes('[❤ ')) {
-                contentHtml = contentHtml.replace(/\[❤ (\d+)\]/g, (m, p1) => {
-                    let hbClass = parseInt(p1) >= 500 ? 'heartbeat-err' : 'heartbeat-anim';
-                    return `<span class="${hbClass}">[❤ ${p1}]</span>`;
+            // 解析心電圖動畫 ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [400]
+            if (contentHtml.includes('ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ')) {
+                contentHtml = contentHtml.replace(/ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ \[(\d+)\]/g, (m, p1) => {
+                    let hbClass = parseInt(p1) >= 500 ? 'ecg-line-err' : 'ecg-line';
+                    return `<span class="${hbClass}">ﮩ٨ـﮩﮩ٨ـ♡ﮩ٨ـﮩﮩ٨ـ [${p1}]</span>`;
                 });
             }
             
@@ -1020,7 +1050,7 @@ def start_bot_polling():
     bot.infinity_polling()
 
 if __name__ == '__main__':
-    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載 {len(ACCOUNTS)} 個節點參數。 [ OK ]")
+    logger.info(f"<SYS_INIT> 核心調度模塊啓動！成功掛載 {get_chinese_num(len(ACCOUNTS))} 個節點參數。 [ OK ]")
     
     if not ACCOUNTS:
         logger.error("[!!FATAL!!] 核心節點參數缺失，系統拋出異常並自我鎖定！ [FAIL]")

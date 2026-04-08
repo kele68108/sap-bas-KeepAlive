@@ -1,4 +1,5 @@
 import os
+os.environ['NO_PROXY'] = 'api.telegram.org'
 import sys
 import time
 import threading

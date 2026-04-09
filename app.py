@@ -101,13 +101,23 @@ def send_tg_msg(text):
         except Exception as e:
             logger.error(f"<SYS_ERR_> 遠端推送接口異常: {str(e)} [FAIL]")
 
-def send_tg_photo(photo_path, caption=""):
+def send_tg_photo(photo_path, caption="", retries=3):
     if bot and TG_CHAT_ID and os.path.exists(photo_path):
-        try:
-            with open(photo_path, 'rb') as photo:
-                bot.send_photo(TG_CHAT_ID, photo, caption=caption, parse_mode="HTML")
-        except Exception as e:
-            logger.error(f"<SYS_ERR_> 圖像流回傳阻斷: {str(e)} [FAIL]")
+        for attempt in range(retries):
+            try:
+                with open(photo_path, 'rb') as photo:
+                    # 增加 timeout 參數，防止網關長時間 hang 死
+                    bot.send_photo(TG_CHAT_ID, photo, caption=caption, parse_mode="HTML", timeout=30)
+                return  # 發送成功就直接 return 退出函數
+            except Exception as e:
+                if attempt < retries - 1:
+                    logger.warning(f" > NET_RETRY_ 圖像回傳被切斷，準備第 {attempt+2} 次重試... [WAIT]")
+                    time.sleep(3) # 喘口氣再發
+                else:
+                    logger.error(f"<SYS_ERR_> 圖像流回傳阻斷 (重試耗盡): {str(e)} [FAIL]")
+                    # 降級：圖片徹底發不出去了，至少發條文字報平安
+                    fallback_msg = f"⚠️ <b>圖像回傳失敗</b> ⚠️\n{caption}\n<i>(目標節點出站網絡極不穩定，截圖丟包，但調度指令已成功執行!)</i>"
+                    send_tg_msg(fallback_msg)
 
 # ==========================================
 # 4. 業務邏輯層
@@ -276,8 +286,9 @@ class SAPController:
                             page.keyboard.press("Escape")
                             time.sleep(0.5)
                                 
-                        screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.png"
-                        page.screenshot(path=screenshot_path)
+                        # 改為 JPG 格式並壓縮品質
+                        screenshot_path = f"{work_dir}/capture_{acc_id}_{ws_uuid}.jpg"
+                        page.screenshot(path=screenshot_path, type="jpeg", quality=60)
                         if action_type != "KEEPALIVE":
                             send_tg_photo(screenshot_path, f"■ <b>系統喚醒完成 ({node_name})</b>\n通知：目標容器 [<b>{display_name}</b>] 算力單元已上線！")
                         logger.info(f" < TASK_END_ {node_name} [{action_type}] 調度流程執行成功 [ OK ]")
@@ -290,8 +301,9 @@ class SAPController:
                 except Exception as inner_e:
                     logger.error(f"[!!FATAL!!] {node_name} 運行時發生內核級崩潰 [FAIL]")
                     try:
-                        error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.png"
-                        page.screenshot(path=error_shot)
+                        # 錯誤截圖也改為 JPG 並壓縮
+                        error_shot = f"{work_dir}/error_crash_{acc_id}_{action_type}.jpg"
+                        page.screenshot(path=error_shot, type="jpeg", quality=60)
                         send_tg_photo(error_shot, f"▲ <b>內核級異常警報 ({node_name})</b>\n調度指令: {action_type}\n棧追蹤: <code>{str(inner_e)}</code>")
                     except Exception as pic_e:
                         logger.error(f"<SYS_ERR_> 棧追蹤快照導出失敗: {pic_e} [FAIL]")
